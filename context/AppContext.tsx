@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setDeviceId as setQueryClientDeviceId } from "../lib/query-client";
 
 const DAILY_LIMIT = 2;
 const STORAGE_KEYS = {
@@ -59,6 +60,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceIdToUse);
       }
       setDeviceId(deviceIdToUse);
+      // Tell query-client about the device ID for API requests
+      setQueryClientDeviceId(deviceIdToUse);
+      console.log("[AppContext] Device ID set:", deviceIdToUse);
 
       const today = new Date().toDateString();
       if (date === today && count) {

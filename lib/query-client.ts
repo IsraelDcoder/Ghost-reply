@@ -55,6 +55,7 @@ export async function apiRequest(
   // Add device ID if available
   if (storedDeviceId) {
     headers["X-Device-Id"] = storedDeviceId;
+    console.log("[API] Sending device ID:", storedDeviceId);
   }
 
   const res = await fetch(url.toString(), {
@@ -77,8 +78,15 @@ export const getQueryFn: <T>(options: {
     const baseUrl = getApiUrl();
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
+    const headers: Record<string, string> = {};
+    if (storedDeviceId) {
+      headers["X-Device-Id"] = storedDeviceId;
+      console.log("[Query] Sending device ID:", storedDeviceId);
+    }
+
     const res = await fetch(url.toString(), {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
