@@ -198,7 +198,7 @@ Keep it under 20 words. Return ONLY the reply text, nothing else.`,
 
       const userConversations = await db.query.conversations.findMany({
         where: (fields, operators) => operators.eq(fields.userId, user.id),
-        orderBy: (fields) => [fields.createdAt],
+        orderBy: (fields, operators) => [operators.desc(fields.createdAt)],
         limit: 100,
       });
 

@@ -198,7 +198,13 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.headerRight}>
-            <Pressable style={styles.menuButton}>
+            <Pressable 
+              style={styles.menuButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/history");
+              }}
+            >
               <Ionicons name="time-outline" size={24} color="#9B9BBF" />
             </Pressable>
           </View>

@@ -22,7 +22,12 @@
     "android": {
       "package": "com.ghostreply",
       "versionCode": 1,
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0A0A1A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -42,6 +47,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "adb149cf-05e8-436d-8bc6-82f26e93d3aa"
+      }
+    },
+    "owner": "eazy001kng"
   }
 }

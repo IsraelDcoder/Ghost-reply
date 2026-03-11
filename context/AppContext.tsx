@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { v4 as uuidv4 } from "uuid";
 
 const DAILY_LIMIT = 2;
 const STORAGE_KEYS = {
@@ -10,6 +9,11 @@ const STORAGE_KEYS = {
   IS_SUBSCRIBED: "ghost_is_subscribed",
   DEVICE_ID: "ghost_device_id",
 };
+
+// Simple UUID generator without crypto dependency
+function generateSimpleId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}`;
+}
 
 interface AppContextType {
   hasOnboarded: boolean;
@@ -51,7 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Generate or use existing device ID
       let deviceIdToUse = savedDeviceId;
       if (!deviceIdToUse) {
-        deviceIdToUse = `device_${uuidv4()}`;
+        deviceIdToUse = `device_${generateSimpleId()}`;
         await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceIdToUse);
       }
       setDeviceId(deviceIdToUse);

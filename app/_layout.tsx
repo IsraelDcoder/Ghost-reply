@@ -25,6 +25,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="paywall" />
       <Stack.Screen name="home" />
+      <Stack.Screen name="history" options={{ animation: "slide_from_bottom" }} />
       <Stack.Screen name="result" options={{ animation: "slide_from_bottom" }} />
     </Stack>
   );
