@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
+import * as fs from "fs";
+import * as path from "path";
 import OpenAI from "openai";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -222,6 +224,19 @@ Keep it under 20 words. Return ONLY the reply text, nothing else.`,
   // Health check
   app.get("/api/health", (_req: Request, res: Response) => {
     return res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Privacy Policy
+  app.get("/privacy-policy", (_req: Request, res: Response) => {
+    try {
+      const privacyPath = path.resolve(process.cwd(), "server", "templates", "privacy-policy.html");
+      const privacyContent = fs.readFileSync(privacyPath, "utf-8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(privacyContent);
+    } catch (error) {
+      console.error("Privacy policy error:", error);
+      return res.status(500).json({ error: "Failed to load privacy policy" });
+    }
   });
 
   const httpServer = createServer(app);
