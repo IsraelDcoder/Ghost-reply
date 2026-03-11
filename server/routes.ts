@@ -47,6 +47,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const subscription = (req as any).subscription;
       const { text } = req.body;
 
+      console.log("[/api/analyze] User:", user);
+      console.log("[/api/analyze] Subscription:", subscription);
+      console.log("[/api/analyze] Text length:", text?.length);
+
+      // Validate user exists
+      if (!user || !user.id) {
+        console.error("[/api/analyze] User not found in request");
+        return res.status(401).json({ error: "User not found" });
+      }
+
       if (!text || typeof text !== "string") {
         return res.status(400).json({ error: "Text is required" });
       }

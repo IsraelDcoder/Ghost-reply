@@ -124,6 +124,13 @@ async function registerRoutes(app2) {
       const user = req.user;
       const subscription = req.subscription;
       const { text: text2 } = req.body;
+      console.log("[/api/analyze] User:", user);
+      console.log("[/api/analyze] Subscription:", subscription);
+      console.log("[/api/analyze] Text length:", text2?.length);
+      if (!user || !user.id) {
+        console.error("[/api/analyze] User not found in request");
+        return res.status(401).json({ error: "User not found" });
+      }
       if (!text2 || typeof text2 !== "string") {
         return res.status(400).json({ error: "Text is required" });
       }
