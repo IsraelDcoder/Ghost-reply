@@ -1,6 +1,15 @@
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+let storedDeviceId: string | null = null;
+
+/**
+ * Set the device ID for API requests
+ */
+export function setDeviceId(deviceId: string) {
+  storedDeviceId = deviceId;
+}
+
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
  * @returns {string} The API base URL
@@ -12,7 +21,9 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  let url = new URL(`https://${host}`);
+  // Use HTTP for local development (contains IP or localhost), HTTPS for production
+  const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("10.") ? "http" : "https";
+  let url = new URL(`${protocol}://${host}`);
 
   return url.href;
 }
@@ -32,9 +43,18 @@ export async function apiRequest(
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
 
+  const headers: Record<string, string> = {
+    ...(data ? { "Content-Type": "application/json" } : {}),
+  };
+
+  // Add device ID if available
+  if (storedDeviceId) {
+    headers["X-Device-Id"] = storedDeviceId;
+  }
+
   const res = await fetch(url.toString(), {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

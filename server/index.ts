@@ -1,6 +1,8 @@
+import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { deviceAuthMiddleware, subscriptionCheckMiddleware, rateLimitMiddleware } from "./middleware";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -15,26 +17,16 @@ declare module "http" {
 
 function setupCors(app: express.Application) {
   app.use((req, res, next) => {
-    const origins = new Set<string>();
-
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
-      });
-    }
+    const allowedOrigins = [
+      "http://localhost:8081",
+      "http://localhost:3000",
+      "http://127.0.0.1:8081",
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+    ];
 
     const origin = req.header("origin");
 
-    // Allow localhost origins for Expo web development (any port)
-    const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
-
-    if (origin && (origins.has(origin) || isLocalhost)) {
+    if (origin && allowedOrigins.includes(origin)) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
@@ -226,25 +218,41 @@ function setupErrorHandler(app: express.Application) {
 }
 
 (async () => {
+  log("Starting server setup...");
+  
   setupCors(app);
+  log("CORS setup complete");
+  
   setupBodyParsing(app);
+  log("Body parsing setup complete");
+
+  // Add security middleware
+  app.use(rateLimitMiddleware);
+  log("Rate limiting middleware added");
+  
+  app.use(deviceAuthMiddleware);
+  log("Device authentication middleware added");
+
+  app.use(subscriptionCheckMiddleware);
+  log("Subscription check middleware added");
+  
   setupRequestLogging(app);
+  log("Request logging setup complete");
 
   configureExpoAndLanding(app);
+  log("Expo routing setup complete");
 
+  log("Registering routes...");
   const server = await registerRoutes(app);
+  log("Routes registered");
 
   setupErrorHandler(app);
+  log("Error handler setup complete");
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`express server serving on port ${port}`);
-    },
-  );
+  
+  server.listen(port, () => {
+    const address = server.address();
+    log(`express server serving on port ${port}`);
+  });
 })();
