@@ -1,0 +1,8 @@
+[build]
+  publish = "public"
+  command = "echo 'Netlify Static Site'"
+
+[[redirects]]
+  from = "/privacy-policy"
+  to = "/privacy-policy.html"
+  status = 200
