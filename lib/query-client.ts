@@ -21,9 +21,14 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  // Use HTTP for local development (contains IP or localhost), HTTPS for production
+  // If the domain already includes a protocol, use it as-is
+  if (host.startsWith("http://") || host.startsWith("https://")) {
+    return new URL(host).href;
+  }
+
+  // Otherwise, determine the protocol based on the host
   const protocol = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("10.") ? "http" : "https";
-  let url = new URL(`${protocol}://${host}`);
+  const url = new URL(`${protocol}://${host}`);
 
   return url.href;
 }
