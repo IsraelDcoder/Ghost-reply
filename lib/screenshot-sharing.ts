@@ -97,19 +97,8 @@ async function shareToInstagram(imageUri: string, caption: string): Promise<void
  */
 async function genericShare(imageUri: string, caption: string): Promise<void> {
   try {
-    // For local file URIs, we need to prepare the file
-    let fileToShare = imageUri;
-
-    // If it's a file:// URI, make sure it's readable
-    if (fileToShare.startsWith("file://")) {
-      // On native, file:// URIs work directly
-      const exists = await FileSystem.getInfoAsync(fileToShare);
-      if (!exists.exists) {
-        throw new Error(`File not found: ${fileToShare}`);
-      }
-    }
-
-    await Sharing.shareAsync(fileToShare, {
+    // Share the file directly - Sharing will handle validation
+    await Sharing.shareAsync(imageUri, {
       mimeType: "image/png",
       dialogTitle: "Share GhostReply Screenshot",
       UTI: "com.apple.app-bundle-identifier",

@@ -7,6 +7,11 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
     }
   }
 }

@@ -197,10 +197,10 @@ export default function ResultScreen() {
       }
 
       // Capture the view as an image
-      const uri = await captureRef(ref, {
+      let uri = await captureRef(ref, {
         format: "png",
         quality: 0.9,
-        result: "data-uri",
+        result: "tmpfile",
       });
 
       if (!uri) {

@@ -91,7 +91,7 @@ export default function PaywallScreen() {
               />
             )}
             <Text style={styles.planLabel}>Monthly</Text>
-            <Text style={styles.planPrice}>$7.99</Text>
+            <Text style={styles.planPrice}>$4.99</Text>
             <Text style={styles.planPer}>/month</Text>
           </Pressable>
 
