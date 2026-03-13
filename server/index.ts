@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerSubscriptionRoutes } from "./subscription-routes";
 import { deviceAuthMiddleware, subscriptionCheckMiddleware, rateLimitMiddleware } from "./middleware";
 import * as fs from "fs";
 import * as path from "path";
@@ -246,6 +247,10 @@ function setupErrorHandler(app: express.Application) {
   log("Registering routes...");
   const server = await registerRoutes(app);
   log("Routes registered");
+
+  log("Registering subscription routes...");
+  await registerSubscriptionRoutes(app);
+  log("Subscription routes registered");
 
   setupErrorHandler(app);
   log("Error handler setup complete");
