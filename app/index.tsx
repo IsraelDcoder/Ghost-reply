@@ -45,7 +45,7 @@ export default function SplashScreen() {
       if (hasOnboarded) {
         router.replace("/home");
       } else {
-        router.replace("/onboarding");
+        router.replace("/demo-video");
       }
     }, 2200);
 
