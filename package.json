@@ -76,7 +76,8 @@
     "zod": "^3.25.76",
     "zod-validation-error": "^3.5.4",
     "expo-notifications": "~0.32.16",
-    "expo-av": "~16.0.8"
+    "expo-av": "~16.0.8",
+    "expo-video": "~3.0.16"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

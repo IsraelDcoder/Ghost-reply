@@ -18,7 +18,7 @@ import {
   SafeAreaView,
   Platform,
 } from "react-native";
-import { Video, AVPlaybackStatus } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,13 +28,19 @@ const { width, height } = Dimensions.get("window");
 
 export default function DemoVideoScreen() {
   const insets = useSafeAreaInsets();
-  const videoRef = useRef<Video>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
 
-  const [isPlaying, setIsPlaying] = useState(true);
   const [hasWatched, setHasWatched] = useState(false);
-  const [videoStatus, setVideoStatus] = useState<AVPlaybackStatus | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  // Initialize video player with new expo-video API
+  // Using relative path to assets/demo-video.mp4
+  const videoSource = require("../assets/demo-video.mp4");
+  const player = useVideoPlayer(videoSource, (player) => {
+    player.loop = false;
+    player.play();
+  });
 
   // Animate in on mount
   useEffect(() => {
@@ -50,50 +56,38 @@ export default function DemoVideoScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Auto-play video
-    videoRef.current?.playAsync();
   }, [fadeAnim, slideUpAnim]);
 
-  // Track if user has watched enough of the video
-  const handleVideoStatusUpdate = (status: AVPlaybackStatus) => {
-    setVideoStatus(status);
+  // Track video progress
+  useEffect(() => {
+    if (!player.duration) return;
 
-    if (status.isLoaded && status.durationMillis) {
-      // Mark as watched if user gets 50% through
-      const watchedPercentage =
-        (status.positionMillis / status.durationMillis) * 100;
-      if (watchedPercentage > 50) {
+    const interval = setInterval(() => {
+      const currentProgress = (player.currentTime / player.duration) * 100;
+      setProgress(currentProgress);
+
+      // Mark as watched at 50%
+      if (currentProgress > 50) {
         setHasWatched(true);
       }
 
-      // Auto-loop if user hasn't watched enough
-      if (status.didJustFinish && !hasWatched) {
-        videoRef.current?.playFromPositionAsync(0);
+      // Auto-loop if not watched
+      if (player.currentTime >= player.duration && !hasWatched) {
+        player.replay();
       }
-    }
-  };
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [player, hasWatched]);
 
   const handleContinue = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Navigate to gender selection
     router.push("/gender-selection");
   };
 
   const handleSkip = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push("/gender-selection");
-  };
-
-  const getProgressText = () => {
-    if (!videoStatus?.isLoaded || !videoStatus?.durationMillis) {
-      return "Loading...";
-    }
-
-    const percentage = Math.round(
-      (videoStatus.positionMillis / videoStatus.durationMillis) * 100
-    );
-    return `${percentage}%`;
   };
 
   return (
@@ -109,20 +103,17 @@ export default function DemoVideoScreen() {
       >
         {/* Video Container */}
         <View style={styles.videoContainer}>
-          <Video
-            ref={videoRef}
-            source={require("@/assets/images/demo-video.mp4")}
+          <VideoView
             style={styles.video}
-            useNativeControls={false}
-            progressUpdateIntervalMillis={500}
-            onPlaybackStatusUpdate={handleVideoStatusUpdate}
-            isMuted={false}
+            player={player}
+            allowsFullscreen={false}
+            nativeControls={false}
           />
 
-          {/* Gradient Overlay (optional - adds polish) */}
+          {/* Gradient Overlay */}
           <View style={styles.videoOverlay} />
 
-          {/* Skip Button (top right) */}
+          {/* Skip Button */}
           <Pressable
             style={styles.skipButton}
             onPress={handleSkip}
@@ -132,21 +123,16 @@ export default function DemoVideoScreen() {
           </Pressable>
 
           {/* Progress Indicator */}
-          {videoStatus?.isLoaded && videoStatus?.durationMillis && (
-            <View style={styles.progressContainer}>
-              <View
-                style={[
-                  styles.progressBar,
-                  {
-                    width: `${
-                      (videoStatus.positionMillis / videoStatus.durationMillis) *
-                      100
-                    }%`,
-                  },
-                ]}
-              />
-            </View>
-          )}
+          <View style={styles.progressContainer}>
+            <View
+              style={[
+                styles.progressBar,
+                {
+                  width: `${progress}%`,
+                },
+              ]}
+            />
+          </View>
         </View>
 
         {/* Bottom CTA Section */}
@@ -170,10 +156,10 @@ export default function DemoVideoScreen() {
             <Text style={styles.continueButtonText}>Continue</Text>
           </Pressable>
 
-          {/* Optional: Watch percentage hint */}
+          {/* Watch percentage hint */}
           {!hasWatched && (
             <Text style={styles.watchHint}>
-              Watch the demo - {getProgressText()} complete
+              Watch the demo - {Math.round(progress)}% complete
             </Text>
           )}
         </View>
