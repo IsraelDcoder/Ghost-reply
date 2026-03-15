@@ -99,27 +99,22 @@ var openrouter = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY
 });
-var MODEL = "anthropic/claude-3-haiku";
-var SYSTEM_PROMPT = `You are an expert conversation coach and reply generator.
-Analyze the conversation/message provided and generate 5 different reply styles.
-Return ONLY valid JSON, no markdown, no explanation.
-
-Return this exact structure:
+var MODEL = "anthropic/claude-3-5-haiku";
+var SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
+Return ONLY valid JSON, no markdown.
 {
-  "analysis": "Brief insight about the conversation tone and dynamics (1-2 sentences)",
-  "score": <number 0-100 representing conversation engagement/strength>,
-  "scoreLabel": "<short label like 'Strong Start', 'Playing It Cool', 'Hot Connection', etc.>",
-  "scoreAdvice": "<one sentence tip to improve>",
+  "analysis": "Brief tone insight (1-2 sentences max)",
+  "score": <0-100>,
+  "scoreLabel": "Label like 'Strong Start'",
+  "scoreAdvice": "1 sentence tip",
   "replies": {
-    "confident": "<confident reply>",
-    "flirty": "<flirty reply>",
-    "funny": "<funny reply>",
-    "savage": "<savage reply>",
-    "smart": "<thoughtful/smart reply>"
+    "confident": "<reply under 20 words>",
+    "flirty": "<reply under 20 words>",
+    "funny": "<reply under 20 words>",
+    "savage": "<reply under 20 words>",
+    "smart": "<reply under 20 words>"
   }
-}
-
-Keep replies concise (under 20 words each). Make them feel natural, witty, and authentic.`;
+}`;
 async function registerRoutes(app2) {
   app2.post("/api/analyze", async (req, res) => {
     try {
@@ -157,13 +152,12 @@ async function registerRoutes(app2) {
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: `Analyze this conversation and generate replies:
-
+            content: `Conversation:
 ${text2}`
           }
         ],
-        max_tokens: 800,
-        temperature: 0.9
+        max_tokens: 350,
+        temperature: 0.8
       });
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -176,24 +170,26 @@ ${text2}`
       } catch {
         return res.status(500).json({ error: "Failed to parse AI response" });
       }
-      try {
-        const result = await db.insert(conversations).values({
-          userId: user.id,
-          inputText: text2,
-          analysis: parsed.analysis || "",
-          score: parsed.score || 0,
-          scoreLabel: parsed.scoreLabel || "Neutral",
-          scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
-          replies: parsed.replies || {}
-        }).returning();
-        return res.json({
-          ...parsed,
-          conversationId: result[0]?.id
-        });
-      } catch (dbError) {
-        console.error("Database save error:", dbError);
-        return res.json(parsed);
-      }
+      const responseData = {
+        ...parsed,
+        conversationId: void 0
+      };
+      db.insert(conversations).values({
+        userId: user.id,
+        inputText: text2,
+        analysis: parsed.analysis || "",
+        score: parsed.score || 0,
+        scoreLabel: parsed.scoreLabel || "Neutral",
+        scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
+        replies: parsed.replies || {}
+      }).returning().then((result) => {
+        if (result[0]) {
+          console.log(`[/api/analyze] Conversation saved: ${result[0].id}`);
+        }
+      }).catch((dbError) => {
+        console.error("Database save error (non-blocking):", dbError);
+      });
+      return res.json(responseData);
     } catch (error) {
       console.error("AI analysis error:", error);
       const msg = error instanceof Error ? error.message : "Unknown error";
@@ -286,25 +282,310 @@ ${text2}`
   return httpServer;
 }
 
+// server/subscription-service.ts
+import { Pool as Pool2 } from "pg";
+import { drizzle as drizzle2 } from "drizzle-orm/node-postgres";
+import { eq } from "drizzle-orm";
+var pool2 = new Pool2({
+  connectionString: process.env.DATABASE_URL
+});
+var db2 = drizzle2(pool2, { schema: dbSchema });
+async function getUserSubscriptionStatus(userId) {
+  try {
+    const subscription = await db2.query.userSubscriptions.findFirst({
+      where: eq(userSubscriptions.userId, userId)
+    });
+    const now = /* @__PURE__ */ new Date();
+    if (!subscription) {
+      return {
+        isSubscribed: false,
+        isPaid: false,
+        isTrialActive: false,
+        plan: "free"
+      };
+    }
+    const isTrialActive = subscription.trialStartedAt && subscription.trialExpiresAt && subscription.trialExpiresAt > now;
+    const isPaidActive = subscription.isSubscribed && subscription.subscriptionExpiresAt && subscription.subscriptionExpiresAt > now;
+    if (isTrialActive) {
+      const daysRemaining = Math.ceil(
+        (subscription.trialExpiresAt.getTime() - now.getTime()) / (1e3 * 60 * 60 * 24)
+      );
+      return {
+        isSubscribed: true,
+        isPaid: false,
+        isTrialActive: true,
+        plan: "free-trial",
+        trialExpiresAt: subscription.trialExpiresAt || void 0,
+        daysRemaining: Math.max(0, daysRemaining)
+      };
+    }
+    if (isPaidActive) {
+      return {
+        isSubscribed: true,
+        isPaid: true,
+        isTrialActive: false,
+        plan: "premium",
+        subscriptionExpiresAt: subscription.subscriptionExpiresAt || void 0
+      };
+    }
+    return {
+      isSubscribed: false,
+      isPaid: false,
+      isTrialActive: false,
+      plan: "free",
+      trialExpiresAt: subscription.trialExpiresAt || void 0,
+      subscriptionExpiresAt: subscription.subscriptionExpiresAt || void 0
+    };
+  } catch (error) {
+    console.error("Error getting subscription status:", error);
+    return {
+      isSubscribed: false,
+      isPaid: false,
+      isTrialActive: false,
+      plan: "free"
+    };
+  }
+}
+async function startFreeTrial(userId) {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const trialExpiresAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1e3);
+    const existingSubscription = await db2.query.userSubscriptions.findFirst({
+      where: eq(userSubscriptions.userId, userId)
+    });
+    if (existingSubscription) {
+      if (!existingSubscription.trialStartedAt) {
+        await db2.update(userSubscriptions).set({
+          trialStartedAt: now,
+          trialExpiresAt,
+          updatedAt: now
+        }).where(eq(userSubscriptions.userId, userId));
+        console.log(`[Trial] Started new trial for user ${userId}, expires at ${trialExpiresAt}`);
+      } else {
+        console.log(`[Trial] User ${userId} already has a trial record`);
+      }
+    } else {
+      await db2.insert(userSubscriptions).values({
+        userId,
+        isSubscribed: false,
+        // Trial is not a paid subscription
+        trialStartedAt: now,
+        trialExpiresAt,
+        createdAt: now,
+        updatedAt: now
+      });
+      console.log(`[Trial] Created new trial for user ${userId}, expires at ${trialExpiresAt}`);
+    }
+    return getUserSubscriptionStatus(userId);
+  } catch (error) {
+    console.error("Error starting free trial:", error);
+    throw new Error("Failed to start free trial");
+  }
+}
+async function shouldEnforceDailyLimits(userId) {
+  const status = await getUserSubscriptionStatus(userId);
+  return status.plan === "free";
+}
+async function getDailyLimitForUser(userId) {
+  const shouldEnforce = await shouldEnforceDailyLimits(userId);
+  return shouldEnforce ? 2 : Infinity;
+}
+
+// server/subscription-routes.ts
+import { eq as eq2, gte, and } from "drizzle-orm";
+import OpenAI2 from "openai";
+async function registerSubscriptionRoutes(app2) {
+  const openrouter2 = new OpenAI2({
+    baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY
+  });
+  const MODEL2 = "anthropic/claude-3-5-haiku";
+  const SYSTEM_PROMPT2 = `You are a conversation coach. Generate 5 reply styles for this conversation.
+Return ONLY valid JSON, no markdown.
+{
+  "analysis": "Brief tone insight (1-2 sentences max)",
+  "score": <0-100>,
+  "scoreLabel": "Label like 'Strong Start'",
+  "scoreAdvice": "1 sentence tip",
+  "replies": {
+    "confident": "<reply under 20 words>",
+    "flirty": "<reply under 20 words>",
+    "funny": "<reply under 20 words>",
+    "savage": "<reply under 20 words>",
+    "smart": "<reply under 20 words>"
+  }
+}`;
+  app2.get("/api/subscription/status", async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const status = await getUserSubscriptionStatus(user.id);
+      console.log(`[/api/subscription/status] User ${user.id}:`, status);
+      return res.json(status);
+    } catch (error) {
+      console.error("Subscription status error:", error);
+      return res.status(500).json({ error: "Failed to get subscription status" });
+    }
+  });
+  app2.post("/api/subscription/start-trial", async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const currentStatus = await getUserSubscriptionStatus(user.id);
+      if (currentStatus.isSubscribed) {
+        return res.status(400).json({
+          error: "User already has an active subscription or trial",
+          currentPlan: currentStatus.plan
+        });
+      }
+      const newStatus = await startFreeTrial(user.id);
+      console.log(`[/api/subscription/start-trial] Started trial for user ${user.id}`);
+      return res.json({
+        success: true,
+        message: "Free trial started successfully",
+        ...newStatus
+      });
+    } catch (error) {
+      console.error("Start trial error:", error);
+      return res.status(500).json({ error: "Failed to start free trial" });
+    }
+  });
+  app2.get("/api/subscription/daily-limit", async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const dailyLimit = await getDailyLimitForUser(user.id);
+      const status = await getUserSubscriptionStatus(user.id);
+      const today = (/* @__PURE__ */ new Date()).toDateString();
+      const todayConversations = await db2.query.conversations.findMany({
+        where: and(
+          eq2(conversations.userId, user.id),
+          gte(conversations.createdAt, new Date(today))
+        )
+      });
+      return res.json({
+        dailyLimit,
+        used: todayConversations.length,
+        remaining: Math.max(0, dailyLimit - todayConversations.length),
+        isUnlimited: dailyLimit === Infinity,
+        plan: status.plan
+      });
+    } catch (error) {
+      console.error("Daily limit error:", error);
+      return res.status(500).json({ error: "Failed to get daily limit" });
+    }
+  });
+  app2.post("/api/analyze", async (req, res) => {
+    try {
+      const user = req.user;
+      const { text: text2 } = req.body;
+      console.log("[/api/analyze] User:", user?.id);
+      if (!user || !user.id) {
+        console.error("[/api/analyze] User not found in request");
+        return res.status(401).json({ error: "User not found" });
+      }
+      if (!text2 || typeof text2 !== "string") {
+        return res.status(400).json({ error: "Text is required" });
+      }
+      const shouldEnforce = await shouldEnforceDailyLimits(user.id);
+      if (shouldEnforce) {
+        const today = (/* @__PURE__ */ new Date()).toDateString();
+        const todayConversations = await db2.query.conversations.findMany({
+          where: and(
+            eq2(conversations.userId, user.id),
+            gte(conversations.createdAt, new Date(today))
+          )
+        });
+        if (todayConversations.length >= 2) {
+          return res.status(429).json({
+            error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
+            remaining: 0,
+            limit: 2
+          });
+        }
+      }
+      const response = await openrouter2.chat.completions.create({
+        model: MODEL2,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT2 },
+          {
+            role: "user",
+            content: `Conversation:
+${text2}`
+          }
+        ],
+        max_tokens: 350,
+        temperature: 0.8
+      });
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "No response from AI" });
+      }
+      let parsed;
+      try {
+        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+      try {
+        const responseData = {
+          ...parsed,
+          conversationId: void 0
+        };
+        db2.insert(conversations).values({
+          userId: user.id,
+          inputText: text2,
+          analysis: parsed.analysis || "",
+          score: parsed.score || 0,
+          scoreLabel: parsed.scoreLabel || "Neutral",
+          scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
+          replies: parsed.replies || {}
+        }).returning().then((result) => {
+          if (result[0]) {
+            console.log(`[/api/analyze] Conversation saved: ${result[0].id}`);
+          }
+        }).catch((dbError) => {
+          console.error("Database save error (non-blocking):", dbError);
+        });
+        return res.json(responseData);
+      } catch (dbError) {
+        console.error("Database save error (non-blocking):", dbError);
+        return res.json(parsed);
+      }
+    } catch (error) {
+      console.error("AI analysis error:", error);
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      return res.status(500).json({ error: msg });
+    }
+  });
+}
+
 // server/middleware.ts
-import { Pool as Pool3 } from "pg";
-import { drizzle as drizzle3 } from "drizzle-orm/node-postgres";
-import { eq as eq2 } from "drizzle-orm";
+import { Pool as Pool4 } from "pg";
+import { drizzle as drizzle4 } from "drizzle-orm/node-postgres";
+import { eq as eq4 } from "drizzle-orm";
 
 // server/auth.ts
 import { v4 as uuidv4 } from "uuid";
-import { Pool as Pool2 } from "pg";
-import { eq } from "drizzle-orm";
-import { drizzle as drizzle2 } from "drizzle-orm/node-postgres";
-var db2 = null;
+import { Pool as Pool3 } from "pg";
+import { eq as eq3 } from "drizzle-orm";
+import { drizzle as drizzle3 } from "drizzle-orm/node-postgres";
+var db3 = null;
 function getDb() {
-  if (!db2) {
-    const pool3 = new Pool2({
+  if (!db3) {
+    const pool4 = new Pool3({
       connectionString: process.env.DATABASE_URL
     });
-    db2 = drizzle2(pool3, { schema: dbSchema });
+    db3 = drizzle3(pool4, { schema: dbSchema });
   }
-  return db2;
+  return db3;
 }
 async function getOrCreateDevice(deviceId) {
   if (!deviceId) {
@@ -313,10 +594,10 @@ async function getOrCreateDevice(deviceId) {
   const database = getDb();
   try {
     const existingUser = await database.query.users.findFirst({
-      where: eq(users.deviceId, deviceId)
+      where: eq3(users.deviceId, deviceId)
     });
     if (existingUser) {
-      await database.update(users).set({ lastActiveAt: /* @__PURE__ */ new Date() }).where(eq(users.id, existingUser.id));
+      await database.update(users).set({ lastActiveAt: /* @__PURE__ */ new Date() }).where(eq3(users.id, existingUser.id));
       return existingUser;
     }
     const result = await database.insert(users).values({
@@ -342,10 +623,10 @@ function generateDeviceId() {
 }
 
 // server/middleware.ts
-var pool2 = new Pool3({
+var pool3 = new Pool4({
   connectionString: process.env.DATABASE_URL
 });
-var db3 = drizzle3(pool2, { schema: dbSchema });
+var db4 = drizzle4(pool3, { schema: dbSchema });
 var rateLimitStore = /* @__PURE__ */ new Map();
 var RATE_LIMITS = {
   "/api/analyze": { requests: 20, windowMs: 6e4 },
@@ -399,8 +680,8 @@ async function subscriptionCheckMiddleware(req, res, next) {
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    const subscription = await db3.query.userSubscriptions.findFirst({
-      where: eq2(userSubscriptions.userId, user.id)
+    const subscription = await db4.query.userSubscriptions.findFirst({
+      where: eq4(userSubscriptions.userId, user.id)
     });
     const now = /* @__PURE__ */ new Date();
     const isSubscribed = subscription && subscription.isSubscribed && (!subscription.subscriptionExpiresAt || subscription.subscriptionExpiresAt > now);
@@ -594,6 +875,9 @@ function setupErrorHandler(app2) {
   log("Registering routes...");
   const server = await registerRoutes(app);
   log("Routes registered");
+  log("Registering subscription routes...");
+  await registerSubscriptionRoutes(app);
+  log("Subscription routes registered");
   setupErrorHandler(app);
   log("Error handler setup complete");
   const port = parseInt(process.env.PORT || "5000", 10);

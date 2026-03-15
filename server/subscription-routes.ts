@@ -20,7 +20,7 @@ export async function registerSubscriptionRoutes(app: Express): Promise<void> {
     baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
     apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
   });
-  const MODEL = "mistralai/mistral-small";
+  const MODEL = "anthropic/claude-3-5-haiku";
   const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
 {

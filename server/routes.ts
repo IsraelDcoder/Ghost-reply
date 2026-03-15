@@ -18,8 +18,8 @@ const openrouter = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
 });
 
-// Use faster model for better response times - Mistral is significantly faster than Claude
-const MODEL = "mistralai/mistral-small";
+// Use Claude 3.5 Haiku - fast, reliable, and highly available on OpenRouter
+const MODEL = "anthropic/claude-3-5-haiku";
 
 const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
