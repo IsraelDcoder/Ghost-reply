@@ -20,27 +20,22 @@ export async function registerSubscriptionRoutes(app: Express): Promise<void> {
     baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
     apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
   });
-  const MODEL = "anthropic/claude-3-haiku";
-  const SYSTEM_PROMPT = `You are an expert conversation coach and reply generator.
-Analyze the conversation/message provided and generate 5 different reply styles.
-Return ONLY valid JSON, no markdown, no explanation.
-
-Return this exact structure:
+  const MODEL = "mistralai/mistral-small";
+  const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
+Return ONLY valid JSON, no markdown.
 {
-  "analysis": "Brief insight about the conversation tone and dynamics (1-2 sentences)",
-  "score": <number 0-100 representing conversation engagement/strength>,
-  "scoreLabel": "<short label like 'Strong Start', 'Playing It Cool', 'Hot Connection', etc.>",
-  "scoreAdvice": "<one sentence tip to improve>",
+  "analysis": "Brief tone insight (1-2 sentences max)",
+  "score": <0-100>,
+  "scoreLabel": "Label like 'Strong Start'",
+  "scoreAdvice": "1 sentence tip",
   "replies": {
-    "confident": "<confident reply>",
-    "flirty": "<flirty reply>",
-    "funny": "<funny reply>",
-    "savage": "<savage reply>",
-    "smart": "<thoughtful/smart reply>"
+    "confident": "<reply under 20 words>",
+    "flirty": "<reply under 20 words>",
+    "funny": "<reply under 20 words>",
+    "savage": "<reply under 20 words>",
+    "smart": "<reply under 20 words>"
   }
-}
-
-Keep replies concise (under 20 words each). Make them feel natural, witty, and authentic.`;
+}`;
 
   /**
    * GET /api/subscription/status
@@ -188,11 +183,11 @@ Keep replies concise (under 20 words each). Make them feel natural, witty, and a
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
-          content: `Analyze this conversation and generate replies:\n\n${text}`,
+          content: `Conversation:\n${text}`,
         },
       ],
-      max_tokens: 800,
-      temperature: 0.9,
+      max_tokens: 350,
+      temperature: 0.8,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -209,8 +204,14 @@ Keep replies concise (under 20 words each). Make them feel natural, witty, and a
     }
 
     try {
-      const result = await db
-        .insert(conversations)
+      // Return response immediately, save to database in background
+      const responseData = {
+        ...parsed,
+        conversationId: undefined,
+      };
+
+      // Fire and forget - save to DB without blocking response
+      db.insert(conversations)
         .values({
           userId: user.id,
           inputText: text,
@@ -220,14 +221,19 @@ Keep replies concise (under 20 words each). Make them feel natural, witty, and a
           scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
           replies: parsed.replies || {},
         })
-        .returning();
+        .returning()
+        .then((result) => {
+          if (result[0]) {
+            console.log(`[/api/analyze] Conversation saved: ${result[0].id}`);
+          }
+        })
+        .catch((dbError) => {
+          console.error("Database save error (non-blocking):", dbError);
+        });
 
-      return res.json({
-        ...parsed,
-        conversationId: result[0]?.id,
-      });
+      return res.json(responseData);
     } catch (dbError) {
-      console.error("Database save error:", dbError);
+      console.error("Database save error (non-blocking):", dbError);
       return res.json(parsed);
     }
   } catch (error: unknown) {
