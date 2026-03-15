@@ -107,8 +107,15 @@ export async function getUserSubscriptionStatus(userId: string): Promise<Subscri
  * Start a free trial for a user
  * - Creates subscription record if it doesn't exist
  * - Sets trial start date to now
- * - Sets trial expiration to 30 days from now
+ * - Sets trial expiration to 3 days from now
+ * - After 3 days: User must be charged via RevenueCat payment system
  * - Returns the new subscription status
+ * 
+ * IMPORTANT: After trial expires:
+ * 1. Frontend checks getUserSubscriptionStatus()
+ * 2. If trial expired (trialExpiresAt < now) and not yet paid
+ * 3. Show paywall to user to complete payment via RevenueCat
+ * 4. Once payment succeeds: isSubscribed = true, subscriptionExpiresAt set to 1 year later
  */
 export async function startFreeTrial(userId: string): Promise<SubscriptionStatus> {
   try {

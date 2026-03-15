@@ -84,7 +84,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         console.log("[Subscription] Trial has expired!");
         Alert.alert(
           "Your Trial Ended",
-          "Your 30-day free trial has ended. Subscribe now to continue using GhostReply!",
+          "Your 3-day free trial has ended. Subscribe now to continue using GhostReply!",
           [
             {
               text: "Subscribe Now",
@@ -120,7 +120,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   };
 
   /**
-   * Start a 30-day free trial
+   * Start a 3-day free trial
    */
   const startTrial = async () => {
     try {

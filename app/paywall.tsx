@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/context/AppContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { Colors } from "@/constants/colors";
 
 const FEATURES = [
@@ -27,22 +28,21 @@ const FEATURES = [
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { setIsSubscribed } = useApp();
+  const { startTrial } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
 
   const handleStartTrial = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setLoading(true);
-
+    
     try {
-      await new Promise((r) => setTimeout(r, 1000));
-      await setIsSubscribed(true);
+      // Call the subscription service to actually start the trial
+      await startTrial();
+      // If successful, navigate to home
       router.replace("/home");
-    } catch {
-      Alert.alert("Error", "Failed to start trial. Please try again.");
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      // Error alert is already shown by startTrial()
+      console.error("Trial start error:", error);
     }
   };
 
