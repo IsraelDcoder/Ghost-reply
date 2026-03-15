@@ -570,7 +570,6 @@ ${text2}`
 // server/middleware.ts
 import { Pool as Pool4 } from "pg";
 import { drizzle as drizzle4 } from "drizzle-orm/node-postgres";
-import { eq as eq4 } from "drizzle-orm";
 
 // server/auth.ts
 import { v4 as uuidv4 } from "uuid";
@@ -678,24 +677,29 @@ async function subscriptionCheckMiddleware(req, res, next) {
   try {
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
+      req.subscription = {
+        isSubscribed: false,
+        isPaid: false,
+        isTrialActive: false,
+        plan: "free"
+      };
+      return next();
     }
-    const subscription = await db4.query.userSubscriptions.findFirst({
-      where: eq4(userSubscriptions.userId, user.id)
+    const subscriptionStatus = await getUserSubscriptionStatus(user.id);
+    console.log("[SubscriptionCheck]", {
+      userId: user.id,
+      ...subscriptionStatus
     });
-    const now = /* @__PURE__ */ new Date();
-    const isSubscribed = subscription && subscription.isSubscribed && (!subscription.subscriptionExpiresAt || subscription.subscriptionExpiresAt > now);
-    const isInTrial = subscription && subscription.trialStartedAt && subscription.trialExpiresAt && subscription.trialExpiresAt > now;
-    req.subscription = {
-      isSubscribed: isSubscribed || isInTrial,
-      isPaid: isSubscribed,
-      isTrialActive: isInTrial,
-      plan: subscription?.plan
-    };
+    req.subscription = subscriptionStatus;
     next();
   } catch (error) {
     console.error("Subscription check error:", error);
-    req.subscription = { isSubscribed: false, isPaid: false, isTrialActive: false };
+    req.subscription = {
+      isSubscribed: false,
+      isPaid: false,
+      isTrialActive: false,
+      plan: "free"
+    };
     next();
   }
 }

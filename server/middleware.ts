@@ -4,6 +4,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { userSubscriptions, dbSchema } from "@/shared/schema";
 import { eq } from "drizzle-orm";
 import { getOrCreateDevice, extractDeviceId, generateDeviceId } from "./auth";
+import { getUserSubscriptionStatus } from "./subscription-service";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -82,46 +83,44 @@ export async function deviceAuthMiddleware(req: Request, res: Response, next: Ne
 }
 
 /**
- * Subscription validation middleware
- * Checks if user has an active subscription or is within free tier limits
+ * Subscription validation middleware - UPDATED
+ * Uses the subscription service for accurate trial/paid tracking
  */
 export async function subscriptionCheckMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
     const user = (req as any).user;
+
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
+      (req as any).subscription = {
+        isSubscribed: false,
+        isPaid: false,
+        isTrialActive: false,
+        plan: "free",
+      };
+      return next();
     }
 
-    // Check subscription status
-    const subscription = await db.query.userSubscriptions.findFirst({
-      where: eq(userSubscriptions.userId, user.id),
+    // Use the subscription service for accurate status
+    const subscriptionStatus = await getUserSubscriptionStatus(user.id);
+
+    console.log("[SubscriptionCheck]", {
+      userId: user.id,
+      ...subscriptionStatus,
     });
 
-    const now = new Date();
-    const isSubscribed =
-      subscription &&
-      subscription.isSubscribed &&
-      (!subscription.subscriptionExpiresAt || subscription.subscriptionExpiresAt > now);
-
-    const isInTrial =
-      subscription &&
-      subscription.trialStartedAt &&
-      subscription.trialExpiresAt &&
-      subscription.trialExpiresAt > now;
-
     // Attach subscription status to request
-    (req as any).subscription = {
-      isSubscribed: isSubscribed || isInTrial,
-      isPaid: isSubscribed,
-      isTrialActive: isInTrial,
-      plan: subscription?.plan,
-    };
+    (req as any).subscription = subscriptionStatus;
 
     next();
   } catch (error) {
     console.error("Subscription check error:", error);
-    // Don't block on error - let it proceed
-    (req as any).subscription = { isSubscribed: false, isPaid: false, isTrialActive: false };
+    // Default to free on error - don't block request
+    (req as any).subscription = {
+      isSubscribed: false,
+      isPaid: false,
+      isTrialActive: false,
+      plan: "free",
+    };
     next();
   }
 }
