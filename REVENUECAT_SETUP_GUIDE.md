@@ -61,15 +61,15 @@ Complete guide to configure subscriptions and link RevenueCat with Google Play C
 
 #### Recommended Pricing
 
-**Monthly Subscription:**
-- **Price:** $4.99/month
+**Weekly Subscription:**
+- **Price:** $2.99/week
 - **Description:** "Unlimited replies, ad-free experience"
-- **Billing Cycle:** 30 days
+- **Billing Cycle:** 7 days
 
-**Annual Subscription (Optional - for retention):**
-- **Price:** $39.99/year
-- **Description:** "Unlimited replies, 33% savings"
-- **Billing Cycle:** 365 days
+**Monthly Subscription:**
+- **Price:** $9.99/month
+- **Description:** "Unlimited replies, 17% savings"
+- **Billing Cycle:** 30 days
 
 ---
 
@@ -93,7 +93,17 @@ Complete guide to configure subscriptions and link RevenueCat with Google Play C
 
 Go to **Products** and create 3 products:
 
-#### Product 1: Monthly Premium
+#### Product 1: Weekly Premium
+
+| Field | Value |
+|-------|-------|
+| **Product ID** | `com.ghostreply.premium.weekly` |
+| **Type** | Renewable Subscription |
+| **Platform** | Google Play |
+| **Display Name** | Premium Weekly |
+| **Description** | Unlimited replies, no ads |
+
+#### Product 2: Monthly Premium
 
 | Field | Value |
 |-------|-------|
@@ -101,16 +111,6 @@ Go to **Products** and create 3 products:
 | **Type** | Renewable Subscription |
 | **Platform** | Google Play |
 | **Display Name** | Premium Monthly |
-| **Description** | Unlimited replies, no ads |
-
-#### Product 2: Annual Premium
-
-| Field | Value |
-|-------|-------|
-| **Product ID** | `com.ghostreply.premium.annual` |
-| **Type** | Renewable Subscription |
-| **Platform** | Google Play |
-| **Display Name** | Premium Annual |
 | **Description** | Unlimited replies, no ads, best value |
 
 #### Product 3: Free Trial
@@ -134,7 +134,25 @@ Go to **Products** and create 3 products:
 1. Open **Google Play Console** → Select **GhostReply** app
 2. Go to **Monetize → In-app products → Subscriptions**
 
-### 2.2 Create Monthly Subscription
+### 2.2 Create Weekly Subscription
+
+Click **Create product:**
+
+| Field | Value |
+|-------|-------|
+| **Product ID** | `com.ghostreply.premium.weekly` |
+| **Product name** | Premium Weekly |
+| **Title** | Premium Weekly |
+| **Description** | Unlimited analyses, no daily limits, priority support |
+| **Price** | $2.99 (set for your region) |
+| **Billing period** | Weekly (7 days) |
+| **Auto-renewal** | Enabled |
+| **Grace period** | 3 days (optional) |
+| **Account hold period** | 3 days (optional) |
+
+**Status:** Set to **Active**
+
+### 2.3 Create Monthly Subscription
 
 Click **Create product:**
 
@@ -143,27 +161,9 @@ Click **Create product:**
 | **Product ID** | `com.ghostreply.premium.monthly` |
 | **Product name** | Premium Monthly |
 | **Title** | Premium Monthly |
-| **Description** | Unlimited analyses, no daily limits, priority support |
-| **Price** | $4.99 (set for your region) |
+| **Description** | Unlimited analyses, no daily limits, save 17% |
+| **Price** | $9.99 (set for your region) |
 | **Billing period** | Monthly (30 days) |
-| **Auto-renewal** | Enabled |
-| **Grace period** | 3 days (optional) |
-| **Account hold period** | 3 days (optional) |
-
-**Status:** Set to **Active**
-
-### 2.3 Create Annual Subscription
-
-Click **Create product:**
-
-| Field | Value |
-|-------|-------|
-| **Product ID** | `com.ghostreply.premium.annual` |
-| **Product name** | Premium Annual |
-| **Title** | Premium Annual |
-| **Description** | Unlimited analyses, no daily limits, save 33% |
-| **Price** | $39.99 (set for your region) |
-| **Billing period** | Yearly (365 days) |
 | **Auto-renewal** | Enabled |
 | **Grace period** | 3 days (optional) |
 | **Account hold period** | 3 days (optional) |
@@ -428,8 +428,8 @@ GOOGLE_PLAY_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 ## Pricing Strategy Notes
 
 **Why this pricing?**
-- **$4.99/month** - Competitive with similar apps, allows for discounting
-- **$39.99/year** - 33% savings incentivizes annual commitment
+- **$2.99/week** - Low friction entry point, allows users to test easily, reduces decision paralysis
+- **$9.99/month** - Better value (17% savings vs weekly), encourages monthly commitment
 - **3-day trial** - Long enough to experience value, short enough to convert
 
 **Conversion Optimization:**

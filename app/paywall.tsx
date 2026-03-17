@@ -28,9 +28,9 @@ const FEATURES = [
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { startTrial } = useSubscription();
+  const { startTrial, refreshSubscriptionStatus } = useSubscription();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
+  const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("weekly");
 
   const handleStartTrial = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -38,6 +38,10 @@ export default function PaywallScreen() {
     try {
       // Call the subscription service to actually start the trial
       await startTrial();
+      
+      // Refresh subscription status to update UI
+      await refreshSubscriptionStatus();
+      
       // If successful, navigate to home
       router.replace("/home");
     } catch (error) {
@@ -78,6 +82,24 @@ export default function PaywallScreen() {
 
         <View style={styles.plansRow}>
           <Pressable
+            onPress={() => setSelectedPlan("weekly")}
+            style={[
+              styles.planCard,
+              selectedPlan === "weekly" && styles.planCardSelected,
+            ]}
+          >
+            {selectedPlan === "weekly" && (
+              <LinearGradient
+                colors={["#7B6CFF20", "#A855F710"]}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            <Text style={styles.planLabel}>Weekly</Text>
+            <Text style={styles.planPrice}>$2.99</Text>
+            <Text style={styles.planPer}>/week</Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => setSelectedPlan("monthly")}
             style={[
               styles.planCard,
@@ -90,30 +112,12 @@ export default function PaywallScreen() {
                 style={StyleSheet.absoluteFill}
               />
             )}
-            <Text style={styles.planLabel}>Monthly</Text>
-            <Text style={styles.planPrice}>$4.99</Text>
-            <Text style={styles.planPer}>/month</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setSelectedPlan("yearly")}
-            style={[
-              styles.planCard,
-              selectedPlan === "yearly" && styles.planCardSelected,
-            ]}
-          >
-            {selectedPlan === "yearly" && (
-              <LinearGradient
-                colors={["#7B6CFF20", "#A855F710"]}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
             <View style={styles.saveBadge}>
-              <Text style={styles.saveBadgeText}>SAVE 59%</Text>
+              <Text style={styles.saveBadgeText}>SAVE 17%</Text>
             </View>
-            <Text style={styles.planLabel}>Yearly</Text>
-            <Text style={styles.planPrice}>$39</Text>
-            <Text style={styles.planPer}>/year</Text>
+            <Text style={styles.planLabel}>Monthly</Text>
+            <Text style={styles.planPrice}>$9.99</Text>
+            <Text style={styles.planPer}>/month</Text>
           </Pressable>
         </View>
 
@@ -151,7 +155,7 @@ export default function PaywallScreen() {
 
         <Text style={styles.trialNote}>
           3-day free trial, then{" "}
-          {selectedPlan === "monthly" ? "$4.99/month" : "$39/year"}.{"\n"}
+          {selectedPlan === "weekly" ? "$2.99/week" : "$9.99/month"}.{"\n"}
           Cancel anytime before trial ends.
         </Text>
 
