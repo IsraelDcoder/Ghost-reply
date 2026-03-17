@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/context/AppContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { apiRequest } from "@/lib/query-client";
 import { Colors } from "@/constants/colors";
 import {
@@ -28,7 +29,8 @@ import {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { canGenerateReply, remainingReplies, isSubscribed, incrementReplyCount } = useApp();
+  const { incrementReplyCount, repliesUsedToday } = useApp();
+  const { subscriptionStatus, canAnalyzeConversation } = useSubscription();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"paste" | "screenshot" | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -38,10 +40,14 @@ export default function HomeScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom, 20);
 
+  // Check if user can analyze based on subscription context (trial/paid) AND local daily limit
+  const canAnalyze = subscriptionStatus?.isSubscribed ? true : canAnalyzeConversation();
+  const remainingReplies = subscriptionStatus?.isSubscribed ? Infinity : Math.max(0, 2 - repliesUsedToday);
+
   const handlePickImage = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    if (!canGenerateReply) {
+    if (!canAnalyze) {
       showLimitAlert();
       return;
     }
@@ -119,7 +125,7 @@ export default function HomeScreen() {
       return;
     }
 
-    if (!canGenerateReply) {
+    if (!canAnalyze) {
       showLimitAlert();
       return;
     }
@@ -210,7 +216,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {!isSubscribed && (
+        {!subscriptionStatus?.isSubscribed && (
           <Pressable
             onPress={() => router.push("/paywall")}
             style={styles.freeBanner}
@@ -223,7 +229,7 @@ export default function HomeScreen() {
             >
               <Ionicons name="flash" size={14} color="#7B6CFF" />
               <Text style={styles.freeBannerText}>
-                {remainingReplies > 0
+                {remainingReplies > 0 && remainingReplies !== Infinity
                   ? `${remainingReplies} free ${remainingReplies === 1 ? "reply" : "replies"} remaining today`
                   : "Daily limit reached — Upgrade for unlimited"}
               </Text>

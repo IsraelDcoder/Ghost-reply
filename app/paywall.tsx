@@ -28,11 +28,19 @@ const FEATURES = [
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { startTrial, refreshSubscriptionStatus } = useSubscription();
+  const { startTrial, refreshSubscriptionStatus, subscriptionStatus } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("weekly");
 
   const handleStartTrial = async () => {
+    // Don't allow multiple clicks if already in trial or subscribed
+    if (subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed) {
+      return;
+    }
+
+    if (loading) return;
+    
+    setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     try {
@@ -47,6 +55,8 @@ export default function PaywallScreen() {
     } catch (error) {
       // Error alert is already shown by startTrial()
       console.error("Trial start error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -134,8 +144,13 @@ export default function PaywallScreen() {
 
         <Pressable
           onPress={handleStartTrial}
-          disabled={loading}
-          style={({ pressed }) => [styles.ctaButton, { opacity: pressed || loading ? 0.85 : 1 }]}
+          disabled={loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed}
+          style={({ pressed }) => [
+            styles.ctaButton, 
+            { 
+              opacity: (pressed || loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed) ? 0.6 : 1 
+            }
+          ]}
         >
           <LinearGradient
             colors={["#7B6CFF", "#A855F7"]}
@@ -144,7 +159,7 @@ export default function PaywallScreen() {
             style={styles.ctaGradient}
           >
             <Text style={styles.ctaText}>
-              {loading ? "Starting..." : "Start Free Trial"}
+              {loading ? "Starting..." : subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed ? "Trial Active" : "Start Free Trial"}
             </Text>
           </LinearGradient>
         </Pressable>

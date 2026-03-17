@@ -15,6 +15,7 @@ import { StatusBar } from "expo-status-bar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient, setDeviceId } from "@/lib/query-client";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { SubscriptionProvider } from "@/context/SubscriptionContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -72,7 +73,9 @@ function RootLayoutWithApp() {
 export default function RootLayout() {
   return (
     <AppProvider>
-      <RootLayoutWithApp />
+      <SubscriptionProvider>
+        <RootLayoutWithApp />
+      </SubscriptionProvider>
     </AppProvider>
   );
 }
