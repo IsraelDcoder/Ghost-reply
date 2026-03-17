@@ -26,6 +26,7 @@ interface AppContextType {
   incrementReplyCount: () => Promise<void>;
   remainingReplies: number;
   deviceId: string | null;
+  isLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -35,6 +36,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isSubscribed, setIsSubscribedState] = useState(false);
   const [repliesUsedToday, setRepliesUsedToday] = useState(0);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadState();
@@ -74,6 +76,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } catch (e) {
       console.error("Failed to load state:", e);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -109,6 +113,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         incrementReplyCount,
         remainingReplies,
         deviceId,
+        isLoading,
       }}
     >
       {children}

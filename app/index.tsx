@@ -14,7 +14,7 @@ import { Colors } from "@/constants/colors";
 
 export default function SplashScreen() {
   const insets = useSafeAreaInsets();
-  const { hasOnboarded } = useApp();
+  const { hasOnboarded, isLoading } = useApp();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const subtitleAnim = useRef(new Animated.Value(0)).current;
@@ -41,16 +41,19 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    const timer = setTimeout(() => {
-      if (hasOnboarded) {
-        router.replace("/home");
-      } else {
-        router.replace("/demo-video");
-      }
-    }, 2200);
+    // Wait for loading to complete before navigating
+    if (!isLoading) {
+      const timer = setTimeout(() => {
+        if (hasOnboarded) {
+          router.replace("/home");
+        } else {
+          router.replace("/demo-video");
+        }
+      }, 2200);
 
-    return () => clearTimeout(timer);
-  }, [hasOnboarded]);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, hasOnboarded]);
 
   return (
     <LinearGradient

@@ -61,7 +61,9 @@ export default function OnboardingScreen() {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
+      // Mark onboarding as complete and wait for storage to persist
       await setHasOnboarded(true);
+      // Use reset to prevent back navigation to onboarding
       router.replace("/paywall");
     }
   };
