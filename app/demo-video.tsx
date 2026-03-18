@@ -39,7 +39,7 @@ export default function DemoVideoScreen() {
   const videoSource = require("../assets/demo-video.mp4");
   const player = useVideoPlayer(videoSource, (player) => {
     player.loop = false;
-    player.isMuted = true;
+    player.muted = true;
     player.play();
   });
 

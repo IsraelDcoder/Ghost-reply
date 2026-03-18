@@ -104,32 +104,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to parse AI response" });
       }
 
-      // Return response immediately, save to database in background
+      // Save to database and wait for it to complete
+      try {
+        await db.insert(conversations)
+          .values({
+            userId: user.id,
+            inputText: text,
+            analysis: parsed.analysis || "",
+            score: parsed.score || 0,
+            scoreLabel: parsed.scoreLabel || "Neutral",
+            scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
+            replies: parsed.replies || {},
+          });
+        console.log(`[/api/analyze] Conversation saved for user ${user.id}`);
+      } catch (dbError) {
+        console.error("Database save error:", dbError);
+        // Don't fail the request, but log it
+      }
+
+      // Return response after DB save is complete
       const responseData = {
         ...parsed,
         conversationId: undefined,
       };
-
-      // Fire and forget - save to DB without blocking response
-      db.insert(conversations)
-        .values({
-          userId: user.id,
-          inputText: text,
-          analysis: parsed.analysis || "",
-          score: parsed.score || 0,
-          scoreLabel: parsed.scoreLabel || "Neutral",
-          scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
-          replies: parsed.replies || {},
-        })
-        .returning()
-        .then((result) => {
-          if (result[0]) {
-            console.log(`[/api/analyze] Conversation saved: ${result[0].id}`);
-          }
-        })
-        .catch((dbError) => {
-          console.error("Database save error (non-blocking):", dbError);
-        });
 
       return res.json(responseData);
     } catch (error: unknown) {
