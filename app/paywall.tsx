@@ -73,6 +73,13 @@ export default function PaywallScreen() {
     }
   };
 
+  const handleContinueWithFree = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Mark onboarding as complete for free users
+    await setHasOnboarded(true);
+    router.replace("/home");
+  };
+
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const bottomPadding = Platform.OS === "web" ? 34 : Math.max(insets.bottom, 20);
 
@@ -182,7 +189,7 @@ export default function PaywallScreen() {
 
         {/* Continue Button */}
         <Pressable
-          onPress={() => router.replace("/home")}
+          onPress={handleContinueWithFree}
           style={({ pressed }) => [
             styles.continueButton,
             {

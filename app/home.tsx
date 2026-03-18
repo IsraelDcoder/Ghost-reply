@@ -30,7 +30,7 @@ import {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { incrementReplyCount } = useApp();
-  const { subscriptionStatus, dailyLimit, canAnalyzeConversation, refreshSubscriptionStatus } = useSubscription();
+  const { subscriptionStatus, dailyLimit, loading, canAnalyzeConversation, refreshSubscriptionStatus } = useSubscription();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"paste" | "screenshot" | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -178,6 +178,17 @@ export default function HomeScreen() {
       "I want some creative pickup lines. Make them clever, funny, and charming. Not too cheesy."
     );
   };
+
+  // Loading guard: Don't render UI until subscription data is loaded
+  if (loading) {
+    return (
+      <LinearGradient colors={["#0A0A1A", "#0F0F2E"]} style={styles.container}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#7B6CFF" />
+        </View>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient colors={["#0A0A1A", "#0F0F2E"]} style={styles.container}>
