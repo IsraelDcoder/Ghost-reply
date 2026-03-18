@@ -13,56 +13,60 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useApp } from "@/context/AppContext";
 import { useSubscription } from "@/context/SubscriptionContext";
 import { Colors } from "@/constants/colors";
 
-const FEATURES = [
-  { icon: "camera", text: "AI analyzes chat screenshots" },
-  { icon: "chatbubbles", text: "Generate perfect replies instantly" },
-  { icon: "color-palette", text: "5 unique conversation tones" },
-  { icon: "infinite", text: "Unlimited conversations" },
-  { icon: "trending-up", text: "Conversation score & insights" },
-  { icon: "share-social", text: "Shareable chat screenshots" },
+const TIRED_OF_LIST = [
+  "Getting left on read?",
+  "Not knowing what to say?",
+  "Reply with confidence in any situation",
+  "Choose the perfect vibe (flirty, savage, funny, etc.)",
+  "Never overthink texts again",
+];
+
+const PLANS = [
+  {
+    id: "weekly",
+    name: "Most Popular",
+    price: "$2.99",
+    period: "/week",
+    badge: "🔥",
+    features: ["2-3 day trial first", "Cancel anytime"],
+  },
+  {
+    id: "monthly",
+    name: "Best Value",
+    price: "$9.99",
+    period: "/month",
+    badge: "💎",
+    features: ["3-day free trial first", "Cancel anytime", "17% savings"],
+  },
 ];
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { startTrial, refreshSubscriptionStatus, subscriptionStatus } = useSubscription();
+  const { startTrial, subscriptionStatus } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("weekly");
 
   const handleStartTrial = async () => {
-    // Don't allow multiple clicks if already in trial or subscribed
     if (subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed) {
       return;
     }
 
     if (loading) return;
-    
+
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
+
     try {
-      // Call the subscription service to actually start the trial
       await startTrial();
-      
-      // Refresh subscription status to update UI
-      await refreshSubscriptionStatus();
-      
-      // If successful, navigate to home
       router.replace("/home");
     } catch (error) {
-      // Error alert is already shown by startTrial()
       console.error("Trial start error:", error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleContinueFree = async () => {
-    await Haptics.selectionAsync();
-    router.replace("/home");
   };
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -77,79 +81,83 @@ export default function PaywallScreen() {
           { paddingTop: topPadding + 20, paddingBottom: bottomPadding + 20 },
         ]}
       >
-        <View style={styles.header}>
-          <LinearGradient
-            colors={["#7B6CFF", "#A855F7"]}
-            style={styles.iconContainer}
-          >
-            <Text style={styles.iconEmoji}>👻</Text>
-          </LinearGradient>
-          <Text style={styles.title}>Unlock GhostReply Pro</Text>
-          <Text style={styles.subtitle}>
-            Start your 3-day free trial. Cancel anytime.
-          </Text>
+        {/* Ghost Icon */}
+        <View style={styles.ghostContainer}>
+          <Text style={styles.ghostEmoji}>👻</Text>
         </View>
 
-        <View style={styles.plansRow}>
-          <Pressable
-            onPress={() => setSelectedPlan("weekly")}
-            style={[
-              styles.planCard,
-              selectedPlan === "weekly" && styles.planCardSelected,
-            ]}
-          >
-            {selectedPlan === "weekly" && (
-              <LinearGradient
-                colors={["#7B6CFF20", "#A855F710"]}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
-            <Text style={styles.planLabel}>Weekly</Text>
-            <Text style={styles.planPrice}>$2.99</Text>
-            <Text style={styles.planPer}>/week</Text>
-          </Pressable>
+        {/* Main Title */}
+        <Text style={styles.mainTitle}>Never Get Left On Read Again</Text>
 
-          <Pressable
-            onPress={() => setSelectedPlan("monthly")}
-            style={[
-              styles.planCard,
-              selectedPlan === "monthly" && styles.planCardSelected,
-            ]}
-          >
-            {selectedPlan === "monthly" && (
-              <LinearGradient
-                colors={["#7B6CFF20", "#A855F710"]}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
-            <View style={styles.saveBadge}>
-              <Text style={styles.saveBadgeText}>SAVE 17%</Text>
-            </View>
-            <Text style={styles.planLabel}>Monthly</Text>
-            <Text style={styles.planPrice}>$9.99</Text>
-            <Text style={styles.planPer}>/month</Text>
-          </Pressable>
+        {/* Subtitle */}
+        <Text style={styles.subtitle}>Your messages deserve better replies.</Text>
+
+        {/* Example Reply */}
+        <View style={styles.exampleBox}>
+          <Text style={styles.exampleLabel}>Example reply:</Text>
+          <Text style={styles.exampleText}>Careful... you might actually start liking me 😏</Text>
         </View>
 
-        <View style={styles.featuresCard}>
-          {FEATURES.map((f, i) => (
-            <View key={i} style={styles.featureRow}>
-              <View style={styles.featureIconContainer}>
-                <Ionicons name={f.icon as any} size={18} color="#7B6CFF" />
+        {/* Tagline */}
+        <Text style={styles.tagline}>GhostReply fixes that instantly.</Text>
+
+        {/* Price Plans */}
+        <View style={styles.plansContainer}>
+          {PLANS.map((plan) => (
+            <Pressable
+              key={plan.id}
+              onPress={() => setSelectedPlan(plan.id as "weekly" | "monthly")}
+              style={[
+                styles.planCard,
+                selectedPlan === plan.id && styles.planCardSelected,
+              ]}
+            >
+              {/* Badge */}
+              <View style={styles.planBadge}>
+                <Text style={styles.badgeEmoji}>{plan.badge}</Text>
+                <Text style={styles.badgeText}>{plan.name}</Text>
               </View>
-              <Text style={styles.featureText}>{f.text}</Text>
+
+              {/* Price */}
+              <Text style={styles.price}>{plan.price}</Text>
+              <Text style={styles.period}>{plan.period}</Text>
+
+              {/* Features */}
+              {plan.features.map((feature, idx) => (
+                <Text key={idx} style={styles.feature}>
+                  • {feature}
+                </Text>
+              ))}
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Tired Of Section */}
+        <View style={styles.tiredOfContainer}>
+          <Text style={styles.tiredOfTitle}>✅ Tired of:</Text>
+
+          {TIRED_OF_LIST.map((item, idx) => (
+            <View key={idx} style={styles.checkItem}>
+              <Ionicons name="checkmark-circle" size={18} color="#7B6CFF" />
+              <Text style={styles.checkText}>{item}</Text>
             </View>
           ))}
         </View>
 
+        {/* CTA Button */}
         <Pressable
           onPress={handleStartTrial}
-          disabled={loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed}
+          disabled={
+            loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed
+          }
           style={({ pressed }) => [
-            styles.ctaButton, 
-            { 
-              opacity: (pressed || loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed) ? 0.6 : 1 
-            }
+            styles.ctaButton,
+            {
+              opacity:
+                pressed || loading || subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed
+                  ? 0.6
+                  : 1,
+            },
           ]}
         >
           <LinearGradient
@@ -159,27 +167,31 @@ export default function PaywallScreen() {
             style={styles.ctaGradient}
           >
             <Text style={styles.ctaText}>
-              {loading ? "Starting..." : subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed ? "Trial Active" : "Start Free Trial"}
+              {loading
+                ? "Starting..."
+                : subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed
+                  ? "✓ Active"
+                  : "Start Winning Now"}
             </Text>
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={handleContinueFree} style={styles.restoreButton}>
-          <Text style={styles.restoreText}>Continue with free plan</Text>
-        </Pressable>
+        {/* Social Proof */}
+        <Text style={styles.socialProof}>Join 10,000+ users improving their conversations.</Text>
 
-        <Text style={styles.trialNote}>
-          3-day free trial, then{" "}
-          {selectedPlan === "weekly" ? "$2.99/week" : "$9.99/month"}.{"\n"}
-          Cancel anytime before trial ends.
-        </Text>
-
-        <View style={styles.linksRow}>
-          <Text style={styles.link}>Terms of Service</Text>
-          <Text style={styles.linkDivider}>•</Text>
-          <Text style={styles.link}>Privacy Policy</Text>
-          <Text style={styles.linkDivider}>•</Text>
-          <Text style={styles.link}>Restore Purchases</Text>
+        {/* Footer Links */}
+        <View style={styles.footer}>
+          <Pressable>
+            <Text style={styles.footerLink}>Terms of Service</Text>
+          </Pressable>
+          <Text style={styles.footerDot}>•</Text>
+          <Pressable>
+            <Text style={styles.footerLink}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={styles.footerDot}>•</Text>
+          <Pressable>
+            <Text style={styles.footerLink}>Restore Purchases</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -191,154 +203,165 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    alignItems: "center",
     paddingHorizontal: 24,
-    gap: 20,
+    gap: 16,
   },
-  header: {
+  ghostContainer: {
     alignItems: "center",
-    gap: 12,
+    marginBottom: 16,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
+  ghostEmoji: {
+    fontSize: 60,
   },
-  iconEmoji: {
-    fontSize: 36,
-  },
-  title: {
-    fontSize: 28,
+  mainTitle: {
+    fontSize: 32,
     fontFamily: "Inter_700Bold",
     color: "#FFFFFF",
     textAlign: "center",
     letterSpacing: -0.5,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Inter_400Regular",
     color: "#9B9BBF",
     textAlign: "center",
+    marginBottom: 16,
   },
-  plansRow: {
-    flexDirection: "row",
+  exampleBox: {
+    backgroundColor: "#1A1A35",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#7B6CFF",
+  },
+  exampleLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: "#7B6CFF",
+    marginBottom: 4,
+  },
+  exampleText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#FFFFFF",
+  },
+  tagline: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  plansContainer: {
     gap: 12,
-    width: "100%",
+    marginVertical: 12,
   },
   planCard: {
-    flex: 1,
     backgroundColor: "#1A1A35",
     borderRadius: 20,
     padding: 20,
-    alignItems: "center",
     borderWidth: 1,
     borderColor: "#252545",
-    overflow: "hidden",
-    gap: 4,
   },
   planCardSelected: {
     borderColor: "#7B6CFF",
+    backgroundColor: "#1A1A35",
   },
-  planLabel: {
+  planBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  badgeEmoji: {
+    fontSize: 16,
+  },
+  badgeText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: "#9B9BBF",
+    fontFamily: "Inter_600SemiBold",
+    color: "#7B6CFF",
   },
-  planPrice: {
-    fontSize: 28,
+  price: {
+    fontSize: 32,
     fontFamily: "Inter_700Bold",
     color: "#FFFFFF",
     letterSpacing: -0.5,
   },
-  planPer: {
+  period: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#5A5A7A",
+    marginBottom: 12,
   },
-  saveBadge: {
-    backgroundColor: "#7B6CFF",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 4,
+  feature: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "#9B9BBF",
+    marginTop: 4,
   },
-  saveBadgeText: {
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
-  },
-  featuresCard: {
+  tiredOfContainer: {
     backgroundColor: "#1A1A35",
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 20,
-    width: "100%",
-    gap: 14,
-    borderWidth: 1,
-    borderColor: "#252545",
+    marginVertical: 12,
   },
-  featureRow: {
+  tiredOfTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FFFFFF",
+    marginBottom: 12,
+  },
+  checkItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    marginBottom: 12,
   },
-  featureIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#7B6CFF15",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  featureText: {
+  checkText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     color: "#FFFFFF",
     flex: 1,
   },
   ctaButton: {
-    width: "100%",
+    marginVertical: 16,
     borderRadius: 16,
     overflow: "hidden",
   },
   ctaGradient: {
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: "center",
   },
   ctaText: {
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
     color: "#FFFFFF",
   },
-  restoreButton: {
-    paddingVertical: 4,
-  },
-  restoreText: {
-    fontSize: 15,
+  socialProof: {
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
     color: "#9B9BBF",
+    textAlign: "center",
+    marginBottom: 16,
   },
-  trialNote: {
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  footerLink: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: "#5A5A7A",
-    textAlign: "center",
-    lineHeight: 18,
   },
-  linksRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  link: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: "#5A5A7A",
-  },
-  linkDivider: {
-    fontSize: 11,
+  footerDot: {
+    fontSize: 12,
     color: "#5A5A7A",
   },
 });
+
