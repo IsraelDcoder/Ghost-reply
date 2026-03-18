@@ -113,11 +113,13 @@ Return ONLY valid JSON, no markdown.
     const status = await getUserSubscriptionStatus(user.id);
 
     // Count today's conversations
-    const today = new Date().toDateString();
+    // Get today's date at midnight UTC
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
     const todayConversations = await db.query.conversations.findMany({
       where: and(
         eq(conversations.userId, user.id),
-        gte(conversations.createdAt, new Date(today))
+        gte(conversations.createdAt, today)
       ),
     });
 

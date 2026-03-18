@@ -41,7 +41,7 @@ export default function HomeScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom, 20);
 
   // Check if user can analyze based on subscription context (trial/paid) and backend daily limit
-  const canAnalyze = subscriptionStatus?.isSubscribed ? true : (dailyLimit?.isUnlimited ?? canAnalyzeConversation());
+  const canAnalyze = subscriptionStatus?.isSubscribed ? true : ((dailyLimit?.remaining ?? 0) > 0);
   // Use backend's daily limit, not local storage
   const remainingReplies = subscriptionStatus?.isSubscribed ? Infinity : (dailyLimit?.remaining ?? 0);
 

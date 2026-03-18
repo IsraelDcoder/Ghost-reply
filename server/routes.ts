@@ -61,16 +61,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check subscription or free tier limit
       if (!subscription?.isSubscribed) {
         // Free tier: 2 replies per day
-        const today = new Date().toDateString();
+        // Get today's date at midnight UTC
+        const now = new Date();
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
         const todayConversations = await db.query.conversations.findMany({
           where: (fields, operators) =>
             operators.and(
               operators.eq(fields.userId, user.id),
-              operators.gte(fields.createdAt, new Date(today))
+              operators.gte(fields.createdAt, today)
             ),
         });
 
+        console.log(`[/api/analyze] Daily limit check:`, {
+          userId: user.id,
+          todayStart: today.toISOString(),
+          conversationCount: todayConversations.length,
+          conversations: todayConversations.map(c => ({id: c.id, createdAt: c.createdAt})),
+        });
+
         if (todayConversations.length >= 2) {
+          console.warn(`[/api/analyze] User ${user.id} hit daily limit`);
           return res.status(429).json({
             error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
             remaining: 0,
