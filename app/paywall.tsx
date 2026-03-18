@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSubscription } from "@/context/SubscriptionContext";
+import { useApp } from "@/context/AppContext";
 import { Colors } from "@/constants/colors";
 
 const TIRED_OF_LIST = [
@@ -46,6 +47,7 @@ const PLANS = [
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const { startTrial, subscriptionStatus } = useSubscription();
+  const { setHasOnboarded } = useApp();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("weekly");
 
@@ -61,6 +63,8 @@ export default function PaywallScreen() {
 
     try {
       await startTrial();
+      // Mark onboarding as complete
+      await setHasOnboarded(true);
       router.replace("/home");
     } catch (error) {
       console.error("Trial start error:", error);
@@ -174,6 +178,19 @@ export default function PaywallScreen() {
                   : "Start Winning Now"}
             </Text>
           </LinearGradient>
+        </Pressable>
+
+        {/* Continue Button */}
+        <Pressable
+          onPress={() => router.replace("/home")}
+          style={({ pressed }) => [
+            styles.continueButton,
+            {
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Text style={styles.continueText}>Continue with free plan</Text>
         </Pressable>
 
         {/* Social Proof */}
@@ -338,6 +355,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Inter_700Bold",
     color: "#FFFFFF",
+  },
+  continueButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  continueText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#7B6CFF",
+    textAlign: "center",
   },
   socialProof: {
     fontSize: 14,
