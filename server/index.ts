@@ -4,6 +4,8 @@ import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { registerSubscriptionRoutes } from "./subscription-routes";
 import { registerPushNotificationRoutes } from "./push-notifications";
+import { registerRevenueCatWebhook } from "./revenuecat-webhook";
+import { initializeCronJobs, stopCronJobs } from "./cron-scheduler";
 import { deviceAuthMiddleware, subscriptionCheckMiddleware, rateLimitMiddleware } from "./middleware";
 import * as fs from "fs";
 import * as path from "path";
@@ -257,6 +259,14 @@ function setupErrorHandler(app: express.Application) {
   registerPushNotificationRoutes(app);
   log("Push notification routes registered");
 
+  log("Registering RevenueCat webhook...");
+  registerRevenueCatWebhook(app);
+  log("RevenueCat webhook registered");
+
+  log("Initializing cron jobs...");
+  initializeCronJobs();
+  log("Cron jobs initialized");
+
   setupErrorHandler(app);
   log("Error handler setup complete");
 
@@ -265,5 +275,24 @@ function setupErrorHandler(app: express.Application) {
   server.listen(port, () => {
     const address = server.address();
     log(`express server serving on port ${port}`);
+  });
+
+  // Graceful shutdown handlers
+  process.on("SIGTERM", () => {
+    log("SIGTERM received, shutting down gracefully...");
+    stopCronJobs();
+    server.close(() => {
+      log("Server closed");
+      process.exit(0);
+    });
+  });
+
+  process.on("SIGINT", () => {
+    log("SIGINT received, shutting down gracefully...");
+    stopCronJobs();
+    server.close(() => {
+      log("Server closed");
+      process.exit(0);
+    });
   });
 })();
