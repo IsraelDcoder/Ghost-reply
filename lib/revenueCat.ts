@@ -19,7 +19,7 @@ import Purchases, {
 import { Platform } from "react-native";
 
 // RevenueCat Configuration
-const REVENUE_CAT_API_KEY = "test_WzkwUaJVoeKQCiUraizICvGcxWV";
+const REVENUE_CAT_API_KEY = "goog_KjDXZHafRRKrhUdeEZzGOOrnCsI";
 export const ENTITLEMENT_ID = "GhostReply Pro"; // Must match Play Console offering
 
 // Product IDs - must match Play Console exact IDs

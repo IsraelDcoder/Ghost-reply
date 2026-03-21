@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.ghostreply",
-      "versionCode": 9,
+      "versionCode": 10,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -53,9 +53,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "aabaccb2-5ef6-4a63-89fb-36af02078121"
+        "projectId": "aeaf7357-c530-4cf5-8237-e388d3f72a0e"
       }
     },
-    "owner": "israeldcoder1"
+    "owner": "onyekha"
   }
 }
