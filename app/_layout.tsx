@@ -17,6 +17,7 @@ import { queryClient, setDeviceId } from "@/lib/query-client";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { SubscriptionProvider } from "@/context/SubscriptionContextWithRevenueCat";
 import { initializeRevenueCat } from "@/lib/revenueCat";
+import { initializeNotificationListeners, requestNotificationPermission, registerPushTokenWithBackend } from "@/lib/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,6 +56,30 @@ function RootLayoutWithApp() {
 
     setupRevenueCat();
   }, []);
+
+  // Initialize notification system on app start
+  useEffect(() => {
+    const setupNotifications = async () => {
+      try {
+        // Set up notification listeners
+        const unsubscribe = initializeNotificationListeners();
+
+        // Request notification permission and get token
+        const token = await requestNotificationPermission();
+
+        // Register token with backend if we have both token and deviceId
+        if (token && deviceId) {
+          await registerPushTokenWithBackend(token, deviceId);
+        }
+
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error setting up notifications:", error);
+      }
+    };
+
+    setupNotifications();
+  }, [deviceId]);
 
   useEffect(() => {
     if (deviceId) {

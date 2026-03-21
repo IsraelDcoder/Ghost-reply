@@ -3,6 +3,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { registerSubscriptionRoutes } from "./subscription-routes";
+import { registerPushNotificationRoutes } from "./push-notifications";
 import { deviceAuthMiddleware, subscriptionCheckMiddleware, rateLimitMiddleware } from "./middleware";
 import * as fs from "fs";
 import * as path from "path";
@@ -251,6 +252,10 @@ function setupErrorHandler(app: express.Application) {
   log("Registering subscription routes...");
   await registerSubscriptionRoutes(app);
   log("Subscription routes registered");
+
+  log("Registering push notification routes...");
+  registerPushNotificationRoutes(app);
+  log("Push notification routes registered");
 
   setupErrorHandler(app);
   log("Error handler setup complete");
