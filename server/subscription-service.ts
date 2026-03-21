@@ -140,10 +140,7 @@ export async function startFreeTrial(userId: string): Promise<SubscriptionStatus
             updatedAt: now,
           })
           .where(eq(userSubscriptions.userId, userId));
-
-        console.log(`[Trial] Started new trial for user ${userId}, expires at ${trialExpiresAt}`);
       } else {
-        console.log(`[Trial] User ${userId} already has a trial record`);
       }
     } else {
       // Create new subscription record with trial
@@ -155,14 +152,11 @@ export async function startFreeTrial(userId: string): Promise<SubscriptionStatus
         createdAt: now,
         updatedAt: now,
       });
-
-      console.log(`[Trial] Created new trial for user ${userId}, expires at ${trialExpiresAt}`);
     }
 
     // Return updated status
     return getUserSubscriptionStatus(userId);
   } catch (error) {
-    console.error("Error starting free trial:", error);
     throw new Error("Failed to start free trial");
   }
 }

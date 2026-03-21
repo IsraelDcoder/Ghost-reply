@@ -51,25 +51,17 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
  */
 export async function deviceAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
-    // Log request details
-    console.log("[DeviceAuth] Path:", req.path);
-    console.log("[DeviceAuth] Headers:", req.headers);
-    
+    // Extract device ID from request
     let deviceId = extractDeviceId(req);
-    console.log("[DeviceAuth] Extracted device ID:", deviceId);
 
     // If no device ID provided, generate one and send back to client
     if (!deviceId) {
-      console.log("[DeviceAuth] No device ID, generating new one");
       deviceId = generateDeviceId();
       res.set("X-Device-Id", deviceId);
     }
 
-    console.log("[DeviceAuth] Getting or creating user for device:", deviceId);
-    
     // Get or create user for this device
     const user = await getOrCreateDevice(deviceId);
-    console.log("[DeviceAuth] User retrieved/created:", user);
 
     // Attach user and device ID to request
     (req as any).user = user;
@@ -77,7 +69,6 @@ export async function deviceAuthMiddleware(req: Request, res: Response, next: Ne
 
     next();
   } catch (error) {
-    console.error("Device auth error:", error);
     return res.status(500).json({ error: "Authentication error: " + (error instanceof Error ? error.message : String(error)) });
   }
 }

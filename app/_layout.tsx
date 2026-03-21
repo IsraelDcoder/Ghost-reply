@@ -15,7 +15,8 @@ import { StatusBar } from "expo-status-bar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient, setDeviceId } from "@/lib/query-client";
 import { AppProvider, useApp } from "@/context/AppContext";
-import { SubscriptionProvider } from "@/context/SubscriptionContext";
+import { SubscriptionProvider } from "@/context/SubscriptionContextWithRevenueCat";
+import { initializeRevenueCat } from "@/lib/revenueCat";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -41,6 +42,19 @@ function RootLayoutWithApp() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Initialize RevenueCat SDK on app start
+  useEffect(() => {
+    const setupRevenueCat = async () => {
+      try {
+        await initializeRevenueCat();
+      } catch (error) {
+        // App continues even if RevenueCat fails
+      }
+    };
+
+    setupRevenueCat();
+  }, []);
 
   useEffect(() => {
     if (deviceId) {

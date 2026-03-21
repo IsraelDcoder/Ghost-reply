@@ -51,8 +51,6 @@ Return ONLY valid JSON, no markdown.
 
     const status = await getUserSubscriptionStatus(user.id);
 
-    console.log(`[/api/subscription/status] User ${user.id}:`, status);
-
     return res.json(status);
   } catch (error) {
     console.error("Subscription status error:", error);
@@ -83,8 +81,6 @@ Return ONLY valid JSON, no markdown.
 
     // Start the trial
     const newStatus = await startFreeTrial(user.id);
-
-    console.log(`[/api/subscription/start-trial] Started trial for user ${user.id}`);
 
     return res.json({
       success: true,
@@ -145,10 +141,7 @@ Return ONLY valid JSON, no markdown.
     const user = (req as any).user;
     const { text } = req.body;
 
-    console.log("[/api/analyze] User:", user?.id);
-
     if (!user || !user.id) {
-      console.error("[/api/analyze] User not found in request");
       return res.status(401).json({ error: "User not found" });
     }
 

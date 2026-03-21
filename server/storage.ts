@@ -1,12 +1,14 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { users } from "@/shared/schema";
 import { randomUUID } from "crypto";
+
+type User = typeof users.$inferSelect;
+type InsertUser = typeof users.$inferInsert;
 
 // modify the interface with any CRUD methods
 // you might need
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 }
 
@@ -21,15 +23,15 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const id = Array.isArray(insertUser.deviceId) ? randomUUID() : insertUser.deviceId;
+    const now = new Date();
+    const user: User = {
+      id,
+      deviceId: insertUser.deviceId as unknown as string,
+      createdAt: now,
+      lastActiveAt: now,
+    };
     this.users.set(id, user);
     return user;
   }

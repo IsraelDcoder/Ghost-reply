@@ -64,15 +64,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       // Fetch subscription status
       const statusRes = await apiRequest("GET", "/api/subscription/status");
       const statusData = await statusRes.json();
-
-      console.log("[Subscription] Status fetched:", statusData);
       setSubscriptionStatus(statusData);
 
       // Fetch daily limit info
       const limitRes = await apiRequest("GET", "/api/subscription/daily-limit");
       const limitData = await limitRes.json();
-
-      console.log("[Subscription] Daily limit fetched:", limitData);
       setDailyLimit(limitData);
 
       // EDGE CASE: Trial expired, show paywall
@@ -81,7 +77,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         !statusData.isTrialActive &&
         !statusData.isPaid
       ) {
-        console.log("[Subscription] Trial has expired!");
         Alert.alert(
           "Your Trial Ended",
           "Your 3-day free trial has ended. Subscribe now to continue using GhostReply!",
@@ -134,7 +129,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         throw new Error(data.error || "Failed to start trial");
       }
 
-      console.log("[Subscription] Trial started successfully:", data);
       setSubscriptionStatus(data);
 
       Alert.alert(

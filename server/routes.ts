@@ -44,13 +44,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const subscription = (req as any).subscription;
       const { text } = req.body;
 
-      console.log("[/api/analyze] User:", user);
-      console.log("[/api/analyze] Subscription:", subscription);
-      console.log("[/api/analyze] Text length:", text?.length);
-
       // Validate user exists
       if (!user || !user.id) {
-        console.error("[/api/analyze] User not found in request");
         return res.status(401).json({ error: "User not found" });
       }
 
@@ -72,15 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ),
         });
 
-        console.log(`[/api/analyze] Daily limit check:`, {
-          userId: user.id,
-          todayStart: today.toISOString(),
-          conversationCount: todayConversations.length,
-          conversations: todayConversations.map(c => ({id: c.id, createdAt: c.createdAt})),
-        });
-
         if (todayConversations.length >= 2) {
-          console.warn(`[/api/analyze] User ${user.id} hit daily limit`);
           return res.status(429).json({
             error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
             remaining: 0,
@@ -126,10 +113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
             replies: parsed.replies || {},
           });
-        console.log(`[/api/analyze] Conversation saved for user ${user.id}`);
       } catch (dbError) {
-        console.error("Database save error:", dbError);
-        // Don't fail the request, but log it
+        // Log to error tracking, don't fail the request
       }
 
       // Return response after DB save is complete
@@ -140,7 +125,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json(responseData);
     } catch (error: unknown) {
-      console.error("AI analysis error:", error);
       const msg = error instanceof Error ? error.message : "Unknown error";
       return res.status(500).json({ error: msg });
     }
