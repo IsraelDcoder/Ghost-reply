@@ -49,8 +49,10 @@ function RootLayoutWithApp() {
     const setupRevenueCat = async () => {
       try {
         await initializeRevenueCat();
+        console.log('[RevenueCat] SDK initialized successfully');
       } catch (error) {
-        // App continues even if RevenueCat fails
+        console.error('[RevenueCat] Initialization failed:', error);
+        // App continues even if RevenueCat fails, but log the error for debugging
       }
     };
 

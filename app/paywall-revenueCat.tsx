@@ -77,8 +77,10 @@ export default function PaywallScreenWithRevenueCat() {
 
       const offerings = await getAvailableOfferings();
 
+      console.log('[Paywall] Offerings response:', offerings);
+
       if (!offerings || !offerings.availablePackages || offerings.availablePackages.length === 0) {
-        throw new Error("No offerings available from RevenueCat");
+        throw new Error("No offerings available from RevenueCat. Have you configured offerings in RevenueCat dashboard?");
       }
 
       const plansMap = new Map<string, PlanData>();
@@ -238,6 +240,11 @@ export default function PaywallScreenWithRevenueCat() {
 
   // Render error state with retry button
   if (offeringsError) {
+    const isNetworkError = offeringsError.toLowerCase().includes('network') || 
+                          offeringsError.toLowerCase().includes('connection');
+    const isConfigError = offeringsError.toLowerCase().includes('no offerings') ||
+                         offeringsError.toLowerCase().includes('offerings');
+    
     return (
       <LinearGradient colors={["#0A0A1A", "#0F0A2E", "#1A0A2E"]} style={styles.container}>
         <View style={styles.centerContent}>
@@ -248,7 +255,13 @@ export default function PaywallScreenWithRevenueCat() {
             style={{ marginBottom: 16 }}
           />
           <Text style={styles.errorTitle}>Oops!</Text>
-          <Text style={styles.errorMessage}>{offeringsError}</Text>
+          <Text style={styles.errorMessage}>
+            {isConfigError 
+              ? "Subscriptions are being set up. Check back soon!"
+              : isNetworkError
+              ? "No internet connection. Please check your network."
+              : offeringsError}
+          </Text>
           <Pressable
             onPress={fetchOfferings}
             style={styles.retryButton}
