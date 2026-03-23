@@ -24,8 +24,8 @@ export const ENTITLEMENT_ID = "GhostReply Pro"; // Must match Play Console offer
 
 // Product IDs - must match Play Console exact IDs
 export const PRODUCTS = {
-  WEEKLY: "com-ghostreply-premium-weekly",
-  MONTHLY: "com-ghostreply-premium-monthly",
+  WEEKLY: "com.ghostreply.premium.weekly",
+  MONTHLY: "com.ghostreply.premium.monthly",
 };
 
 // Offering ID (grouping of products)
