@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.ghostreply",
-      "versionCode": 14,
+      "versionCode": 15,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",

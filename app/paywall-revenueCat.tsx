@@ -241,9 +241,11 @@ export default function PaywallScreenWithRevenueCat() {
       // setHasOnboarded is async and persists to storage - MUST await it
       await setHasOnboarded(true);
       
-      // Direct navigation - no additional delay needed since setHasOnboarded already waits
-      console.log("[Paywall] Navigating to /home now");
-      router.replace("/home");
+      // Small delay to ensure AsyncStorage persists and state updates complete
+      setTimeout(() => {
+        console.log("[Paywall] ✓ State persisted, now navigating to /home");
+        router.replace("/home");
+      }, 500);
     } catch (error) {
       console.error("[Paywall] Error in free plan flow:", error);
       console.error("[Paywall] Error details:", JSON.stringify(error));

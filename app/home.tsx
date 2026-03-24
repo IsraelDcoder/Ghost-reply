@@ -18,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/context/AppContext";
-import { useSubscription } from "@/context/SubscriptionContext";
+import { useSubscription } from "@/context/SubscriptionContextWithRevenueCat";
 import { apiRequest } from "@/lib/query-client";
 import { Colors } from "@/constants/colors";
 import {
