@@ -142,15 +142,37 @@ async function handleRevenueCatEvent(event: any): Promise<void> {
  */
 async function handleInitialPurchase(userId: string, event: any): Promise<void> {
   try {
-    const subscriptionData = event.event?.purchased_at;
     const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
+    const purchasedAt = event.event?.purchased_at_ms;
 
-    console.log(`[RevenueCat] Initial purchase: ${userId} - ${plan}`);
+    console.log(`[RevenueCat] Initial purchase: ${userId} - ${plan}, expires: ${expiresAt}`);
+
+    // Update database with subscription info
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    
+    // Upsert subscription record
+    await db
+      .insert(userSubscriptions)
+      .values({
+        userId,
+        isSubscribed: true,
+        subscriptionExpiresAt,
+        trialStartedAt: null,
+        trialExpiresAt: null,
+      })
+      .onConflictDoUpdate({
+        target: userSubscriptions.userId,
+        set: {
+          isSubscribed: true,
+          subscriptionExpiresAt,
+        },
+      });
+
+    console.log(`[RevenueCat] ✓ Subscription saved to database for user ${userId}`);
 
     // Send congratulations notification
     await notifySubscriptionSuccess(userId, plan || "Premium");
-
-    // Update local subscription status if needed (RevenueCat webhook is source of truth in production)
   } catch (error) {
     console.error("[RevenueCat] Error handling initial purchase:", error);
   }
@@ -163,10 +185,23 @@ async function handleInitialPurchase(userId: string, event: any): Promise<void> 
 async function handleRenewal(userId: string, event: any): Promise<void> {
   try {
     const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
 
-    console.log(`[RevenueCat] Renewal: ${userId} - ${plan}`);
+    console.log(`[RevenueCat] Renewal: ${userId} - ${plan}, expires: ${expiresAt}`);
 
-    // Optionally: Send renewal confirmation notification
+    // Update subscription expiration in database
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    
+    await db
+      .update(userSubscriptions)
+      .set({
+        subscriptionExpiresAt,
+      })
+      .where(eq(userSubscriptions.userId, userId));
+
+    console.log(`[RevenueCat] ✓ Subscription renewed and updated for user ${userId}`);
+
+    // Send renewal confirmation notification
     // await notifySubscriptionSuccess(userId, `${plan} (Renewed)`);
 
     // Note: RevenueCat handles all subscription state updates
@@ -200,8 +235,32 @@ async function handleSubscriptionTransfer(userId: string, event: any): Promise<v
 async function handleSubscriptionStarted(userId: string, event: any): Promise<void> {
   try {
     const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
 
-    console.log(`[RevenueCat] Subscription started: ${userId} - ${plan}`);
+    console.log(`[RevenueCat] Subscription started: ${userId} - ${plan}, expires: ${expiresAt}`);
+
+    // Update database with subscription info
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    
+    // Upsert subscription record
+    await db
+      .insert(userSubscriptions)
+      .values({
+        userId,
+        isSubscribed: true,
+        subscriptionExpiresAt,
+        trialStartedAt: null,
+        trialExpiresAt: null,
+      })
+      .onConflictDoUpdate({
+        target: userSubscriptions.userId,
+        set: {
+          isSubscribed: true,
+          subscriptionExpiresAt,
+        },
+      });
+
+    console.log(`[RevenueCat] ✓ Subscription started and saved for user ${userId}`);
 
     // Send welcome notification
     await notifySubscriptionSuccess(userId, plan || "Premium");
@@ -219,6 +278,17 @@ async function handleCancellation(userId: string, event: any): Promise<void> {
     const reason = event.event?.cancellation_reason;
 
     console.log(`[RevenueCat] Cancellation: ${userId} - Reason: ${reason}`);
+
+    // Update subscription status in database
+    await db
+      .update(userSubscriptions)
+      .set({
+        isSubscribed: false,
+        subscriptionExpiresAt: null,
+      })
+      .where(eq(userSubscriptions.userId, userId));
+
+    console.log(`[RevenueCat] ✓ Subscription cancelled for user ${userId}`);
 
     // Optionally: Send win-back notification after a few days
     // OR: Log to analytics for churn analysis

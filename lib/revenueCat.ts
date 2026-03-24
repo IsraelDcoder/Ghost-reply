@@ -34,8 +34,9 @@ export const OFFERING_ID = "default";
 /**
  * Initialize RevenueCat SDK
  * Called once on app startup
+ * @param deviceId - Device ID from app context (must match backend user ID)
  */
-export async function initializeRevenueCat(): Promise<void> {
+export async function initializeRevenueCat(deviceId: string): Promise<void> {
   try {
     // Enable verbose logging in development
     if (__DEV__) {
@@ -45,11 +46,14 @@ export async function initializeRevenueCat(): Promise<void> {
     }
 
     // Initialize SDK with API key
-    // Platform.OS returns "ios" or "android"
+    // CRITICAL: appUserID must match the device ID used by backend
+    // This ensures webhook events have the correct user ID
     await Purchases.configure({
       apiKey: REVENUE_CAT_API_KEY,
-      appUserID: undefined, // Let RevenueCat generate anonymous ID
+      appUserID: deviceId, // Match backend device ID for webhook correlation
     });
+
+    console.log("[RevenueCat] Initialized with appUserID:", deviceId);
   } catch (error) {
     throw error;
   }

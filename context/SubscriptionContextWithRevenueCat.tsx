@@ -88,10 +88,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     const initializeSubscriptions = async () => {
       try {
         setLoading(true);
-        console.log("[Subscription] Initializing RevenueCat...");
+        
+        if (!deviceId) {
+          console.log("[Subscription] Waiting for deviceId...");
+          return;
+        }
+        
+        console.log("[Subscription] Initializing RevenueCat with deviceId:", deviceId);
 
-        // Initialize RevenueCat SDK
-        await initializeRevenueCat();
+        // Initialize RevenueCat SDK with device ID for webhook correlation
+        await initializeRevenueCat(deviceId);
 
         // Fetch initial subscription status
         await refreshSubscriptionStatus();
@@ -106,7 +112,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     };
 
     initializeSubscriptions();
-  }, []);
+  }, [deviceId]);
 
   /**
    * Listen for app foreground/background changes
