@@ -206,8 +206,8 @@ export default function PaywallScreenWithRevenueCat() {
         console.log("[Paywall] ✓ Purchase completed successfully!");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Success! 🎉", "Welcome to GhostReply Pro!");
-        // IMPORTANT: setHasOnboarded is a state setter, NOT async - don't await it
-        setHasOnboarded(true);
+        // setHasOnboarded is async and persists to storage - MUST await it
+        await setHasOnboarded(true);
         
         // Small delay to ensure navigation happens
         setTimeout(() => {
@@ -238,14 +238,12 @@ export default function PaywallScreenWithRevenueCat() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       
       console.log("[Paywall] Marking onboarded and navigating to home...");
-      // IMPORTANT: setHasOnboarded is a state setter, NOT async - don't await it
-      setHasOnboarded(true);
+      // setHasOnboarded is async and persists to storage - MUST await it
+      await setHasOnboarded(true);
       
-      // Small delay to ensure state update completes
-      setTimeout(() => {
-        console.log("[Paywall] Navigating to /home now");
-        router.replace("/home");
-      }, 300);
+      // Direct navigation - no additional delay needed since setHasOnboarded already waits
+      console.log("[Paywall] Navigating to /home now");
+      router.replace("/home");
     } catch (error) {
       console.error("[Paywall] Error in free plan flow:", error);
       console.error("[Paywall] Error details:", JSON.stringify(error));
