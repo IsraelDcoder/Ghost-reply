@@ -206,10 +206,12 @@ export default function PaywallScreenWithRevenueCat() {
         console.log("[Paywall] ✓ Purchase completed successfully!");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Success! 🎉", "Welcome to GhostReply Pro!");
-        await setHasOnboarded(true);
+        // IMPORTANT: setHasOnboarded is a state setter, NOT async - don't await it
+        setHasOnboarded(true);
         
         // Small delay to ensure navigation happens
         setTimeout(() => {
+          console.log("[Paywall] Navigating to home after purchase");
           router.replace("/home");
         }, 500);
       } else {
@@ -236,15 +238,18 @@ export default function PaywallScreenWithRevenueCat() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       
       console.log("[Paywall] Marking onboarded and navigating to home...");
-      await setHasOnboarded(true);
+      // IMPORTANT: setHasOnboarded is a state setter, NOT async - don't await it
+      setHasOnboarded(true);
       
       // Small delay to ensure state update completes
       setTimeout(() => {
+        console.log("[Paywall] Navigating to /home now");
         router.replace("/home");
       }, 300);
     } catch (error) {
       console.error("[Paywall] Error in free plan flow:", error);
-      Alert.alert("Error", "Could not continue. Please try again.");
+      console.error("[Paywall] Error details:", JSON.stringify(error));
+      Alert.alert("Error", `Could not continue. Error: ${error}`);
     }
   };
 
