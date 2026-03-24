@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/context/AppContext";
+import { useSubscription } from "@/context/SubscriptionContextWithRevenueCat";
 import { Colors } from "@/constants/colors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -52,19 +53,31 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { setHasOnboarded } = useApp();
+  const { shouldBypassPaywall } = useSubscription();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+
+  const navigateAfterOnboarding = async () => {
+    await setHasOnboarded(true);
+    
+    // Check if user already has active subscription
+    if (shouldBypassPaywall()) {
+      console.log("[Onboarding] User has active subscription, skipping paywall");
+      router.replace("/home");
+    } else {
+      console.log("[Onboarding] Directing user to paywall");
+      router.replace("/paywall");
+    }
+  };
 
   const goNext = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      // Mark onboarding as complete and wait for storage to persist
-      await setHasOnboarded(true);
-      // Use reset to prevent back navigation to onboarding
-      router.replace("/paywall");
+      // Mark onboarding as complete and navigate
+      await navigateAfterOnboarding();
     }
   };
 
@@ -178,8 +191,7 @@ export default function OnboardingScreen() {
         {currentIndex < SLIDES.length - 1 && (
           <Pressable
             onPress={async () => {
-              await setHasOnboarded(true);
-              router.replace("/paywall");
+              await navigateAfterOnboarding();
             }}
           >
             <Text style={styles.skipText}>Skip</Text>

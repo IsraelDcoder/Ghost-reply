@@ -66,6 +66,7 @@ interface SubscriptionContextType {
   canAnalyzeConversation: () => boolean;
   getRemainingAnalyses: () => number;
   getAvailableOfferingsList: () => Promise<PurchaseOffering[]>;
+  shouldBypassPaywall: () => boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -137,11 +138,24 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setLoading(true);
       setError(null);
 
+      console.log("[Subscription] Fetching customer info from RevenueCat...");
+
       // Check if user has premium entitlement via RevenueCat
       const hasPremium = await checkEntitlement(ENTITLEMENT_ID);
 
       // Fetch customer info for detailed subscription data
       const customerInfo = await getCustomerInfo();
+
+      console.log("[Subscription] RevenueCat response:", {
+        hasPremium,
+        appUserID: customerInfo.originalAppUserId,
+        activeEntitlements: Object.keys(customerInfo.entitlements.active),
+        premiumEntitlement: customerInfo.entitlements.active[ENTITLEMENT_ID]
+          ? {
+              expirationDate: customerInfo.entitlements.active[ENTITLEMENT_ID]?.expirationDate,
+            }
+          : null,
+      });
 
       // Determine subscription state
       let status: SubscriptionStatus;
@@ -156,6 +170,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           plan: "premium",
           subscriptionExpiresAt: premiumEntitlement?.expirationDate ?? undefined,
         };
+        console.log("[Subscription] ✓ Premium subscription is ACTIVE");
       } else if (Object.keys(customerInfo.entitlements.active).length === 0) {
         // No active entitlements - check backend for free trial
         try {
@@ -163,6 +178,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           const backendStatus = await backendStatusRes.json();
 
           status = backendStatus;
+          console.log("[Subscription] Backend status:", {
+            plan: backendStatus.plan,
+            isTrialActive: backendStatus.isTrialActive,
+          });
         } catch (err) {
           // Backend error - assume free tier
           console.warn("[Subscription] Backend status fetch failed, assuming free tier");
@@ -189,8 +208,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const limitData = await limitRes.json();
       setDailyLimit(limitData);
 
-      console.log("[Subscription] Status refreshed:", {
+      console.log("[Subscription] Final status:", {
         plan: status.plan,
+        isPaid: status.isPaid,
+        isTrialActive: status.isTrialActive,
         remaining: limitData.remaining,
       });
     } catch (err) {
@@ -243,14 +264,37 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
         const result = await purchasePackage(productID);
 
+        // Handle cancelled purchase - don't treat as error
+        if (result.wasCancelled) {
+          console.log("[Subscription] Purchase was cancelled by user");
+          setLoading(false);
+          return false;
+        }
+
         if (!result.success) {
           throw new Error(result.error || "Purchase failed");
         }
 
-        // Purchase successful - refresh subscription status
+        console.log("[Subscription] Purchase successful, verifying entitlement...");
+
+        // Verify premium entitlement is active
+        if (result.customerInfo) {
+          const premiumEntitlement = result.customerInfo.entitlements.active[ENTITLEMENT_ID];
+          
+          if (premiumEntitlement) {
+            console.log("[Subscription] Premium entitlement confirmed:", {
+              entitlementID: ENTITLEMENT_ID,
+              expirationDate: premiumEntitlement.expirationDate,
+            });
+          } else {
+            console.warn("[Subscription] Entitlement not yet in response, will refresh...");
+          }
+        }
+
+        // Refresh subscription status to get latest entitlements
         await refreshSubscriptionStatus();
 
-        console.log("[Subscription] Purchase successful");
+        console.log("[Subscription] Purchase flow complete, status refreshed");
         return true;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Purchase failed";
@@ -345,6 +389,31 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     return dailyLimit?.remaining ?? 0;
   };
 
+  /**
+   * Check if user should bypass the paywall
+   * Returns true if user already has an active subscription or trial
+   */
+  const shouldBypassPaywall = (): boolean => {
+    if (!subscriptionStatus) {
+      return false; // Still loading, show paywall
+    }
+
+    const hasPaidSubscription = subscriptionStatus.isPaid;
+    const hasActiveTrial = subscriptionStatus.isTrialActive;
+
+    if (hasPaidSubscription) {
+      console.log("[Subscription] Bypassing paywall - user has paid subscription");
+      return true;
+    }
+
+    if (hasActiveTrial) {
+      console.log("[Subscription] Bypassing paywall - user has active trial");
+      return true;
+    }
+
+    return false;
+  };
+
   const contextValue: SubscriptionContextType = {
     subscriptionStatus,
     dailyLimit,
@@ -357,6 +426,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     canAnalyzeConversation,
     getRemainingAnalyses,
     getAvailableOfferingsList,
+    shouldBypassPaywall,
   };
 
   return (

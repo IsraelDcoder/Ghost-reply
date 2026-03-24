@@ -115,6 +115,7 @@ export async function purchasePackage(packageID: string): Promise<{
   success: boolean;
   customerInfo?: CustomerInfo;
   error?: string;
+  wasCancelled?: boolean;
 }> {
   try {
     // Get offerings first
@@ -132,8 +133,30 @@ export async function purchasePackage(packageID: string): Promise<{
       throw new Error(`Package not found: ${packageID}`);
     }
 
+    console.log("[RevenueCat] Making purchase for:", packageID);
+
     // Make purchase
     const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
+
+    console.log("[RevenueCat] Purchase completed, checking entitlements...");
+    console.log("[RevenueCat] Customer Info:", {
+      appUserID: customerInfo.originalAppUserId,
+      activeEntitlements: Object.keys(customerInfo.entitlements.active),
+    });
+
+    // Verify premium entitlement is active
+    const premiumEntitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
+    
+    if (!premiumEntitlement) {
+      console.warn("[RevenueCat] Purchase completed but premium entitlement not active yet");
+      // Still return success since the purchase was made - entitlement may activate shortly
+      return {
+        success: true,
+        customerInfo,
+      };
+    }
+
+    console.log("[RevenueCat] Premium entitlement confirmed active");
 
     return {
       success: true,
@@ -142,11 +165,24 @@ export async function purchasePackage(packageID: string): Promise<{
   } catch (error) {
     const purchaseError = error as PurchasesError;
 
-    // Handle common error scenarios
-    if (purchaseError.message && purchaseError.message.includes("Cancel")) {
+    // Log the error details
+    console.error("[RevenueCat] Purchase error:", {
+      message: purchaseError.message,
+      code: purchaseError.code,
+    });
+
+    // Handle user cancelled - don't show error alert for this
+    if (
+      purchaseError.message?.includes("Client error") ||
+      purchaseError.message?.includes("Cancel") ||
+      purchaseError.message?.includes("cancelled") ||
+      purchaseError.message?.includes("user cancel")
+    ) {
+      console.log("[RevenueCat] Purchase was cancelled by user");
       return {
         success: false,
         error: "Purchase cancelled",
+        wasCancelled: true,
       };
     }
 
@@ -154,12 +190,14 @@ export async function purchasePackage(packageID: string): Promise<{
       return {
         success: false,
         error: "Product not available",
+        wasCancelled: false,
       };
     }
 
     return {
       success: false,
       error: purchaseError.message || "Purchase failed",
+      wasCancelled: false,
     };
   }
 }

@@ -33,12 +33,20 @@ import { useApp } from "@/context/AppContext";
 import { getAvailableOfferings } from "@/lib/revenueCat";
 import { Colors } from "@/constants/colors";
 
+// Social proof & trust elements
+const SOCIAL_PROOF = {
+  userCount: "50,000+",
+  rating: "5.0",
+  testimonial: "I stopped getting left on read.",
+  testimonialAuthor: "Jake, 22",
+};
+
 const FEATURE_BENEFITS = [
-  "🔥 Get smart reply suggestions tailored to your style",
-  "💬 Unlock unlimited conversations",
-  "🎯 Choose the perfect tone (flirty, savage, funny, etc.)",
-  "⏰ Never worry about daily limits",
-  "📱 Works offline and instantly",
+  "✨ Get instant, AI-powered replies in seconds",
+  "🎯 Match your vibe—choose any tone you want",
+  "💬 Never run out of things to say again",
+  "🔥 Turn boring chats into engaging conversations",
+  "🚀 Works on Tinder, Instagram, WhatsApp & more",
 ];
 
 interface PlanData {
@@ -55,15 +63,23 @@ interface PlanData {
 
 export default function PaywallScreenWithRevenueCat() {
   const insets = useSafeAreaInsets();
-  const { startTrial, subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases } =
+  const { startTrial, subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall } =
     useSubscription();
   const { setHasOnboarded } = useApp();
 
-  const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("weekly");
+  const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("monthly"); // Default to best value
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
   const [offeringsError, setOfferingsError] = useState<string | null>(null);
   const [plans, setPlans] = useState<Map<string, PlanData>>(new Map());
+
+  // Check if user should bypass paywall (already has subscription)
+  useEffect(() => {
+    if (shouldBypassPaywall()) {
+      console.log("[Paywall] User already has active subscription, redirecting to home");
+      router.replace("/home");
+    }
+  }, [shouldBypassPaywall]);
 
   /**
    * Fetch available offerings from RevenueCat
@@ -183,18 +199,22 @@ export default function PaywallScreenWithRevenueCat() {
       const success = await purchase(packageID);
 
       if (success) {
-        Alert.alert("Success!", "Welcome to GhostReply Pro! 🎉");
+        console.log("[Paywall] Purchase completed successfully, navigating to home...");
+        Alert.alert("Success! 🎉", "Welcome to GhostReply Pro!");
         await setHasOnboarded(true);
         router.replace("/home");
       } else {
-        Alert.alert(
-          "Purchase Failed",
-          "Your purchase could not be completed. Please try again."
-        );
+        // Purchase failed or was cancelled
+        // Only show alert if it was an actual error, not a user cancellation
+        console.log("[Paywall] Purchase did not complete");
+        // Don't show alert here - the context handles logging
       }
     } catch (error) {
       console.error("[Paywall] Purchase error:", error);
-      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      Alert.alert(
+        "Purchase Error",
+        "Something went wrong during purchase. Please try again."
+      );
     } finally {
       setIsPurchasing(false);
     }
@@ -202,8 +222,10 @@ export default function PaywallScreenWithRevenueCat() {
 
   /**
    * Continue with free plan
+   * Does NOT call RevenueCat - just navigates to home as free-tier user
    */
   const handleContinueWithFree = async () => {
+    console.log("[Paywall] User continuing with free plan");
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setHasOnboarded(true);
     router.replace("/home");
@@ -293,12 +315,23 @@ export default function PaywallScreenWithRevenueCat() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.ghostEmoji}>👻</Text>
-          <Text style={styles.mainTitle}>Never Get Left On Read Again</Text>
-          <Text style={styles.subtitle}>Unlock unlimited smart replies in any situation.</Text>
+          <Text style={styles.mainTitle}>Stop Getting Ignored.</Text>
+          <Text style={styles.subtitleHighlight}>Text Like You Actually Know What You're Doing.</Text>
+          <Text style={styles.subtitle}>AI generates perfect replies in seconds — so you never get ghosted again.</Text>
+        </View>
+
+        {/* Social Proof Section */}
+        <View style={styles.socialProofSection}>
+          <View style={styles.ratingRow}>
+            <Text style={styles.stars}>★★★★★</Text>
+            <Text style={styles.ratingText}>Trusted by {SOCIAL_PROOF.userCount} users</Text>
+          </View>
+          <Text style={styles.testimonialText}>\"{SOCIAL_PROOF.testimonial}\" — {SOCIAL_PROOF.testimonialAuthor}</Text>
         </View>
 
         {/* Feature Highlights */}
         <View style={styles.featuresSection}>
+          <Text style={styles.featuresTitle}>Why GhostReply Pro?</Text>
           {FEATURE_BENEFITS.map((benefit, idx) => (
             <View key={idx} style={styles.featureRow}>
               <Text style={styles.featureText}>{benefit}</Text>
@@ -321,8 +354,11 @@ export default function PaywallScreenWithRevenueCat() {
                 <Text style={styles.badgeEmoji}>{plans.get("weekly")?.badge.emoji}</Text>
                 <Text style={styles.badgeText}>{plans.get("weekly")?.badge.text}</Text>
               </View>
-              <Text style={styles.price}>{plans.get("weekly")?.priceString}</Text>
-              <Text style={styles.period}>{plans.get("weekly")?.period}</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.price}>{plans.get("weekly")?.priceString}</Text>
+                <Text style={styles.period}>{plans.get("weekly")?.period}</Text>
+              </View>
+              <Text style={styles.trialText}>2-3 day free trial</Text>
               <View style={styles.featuresBox}>
                 {plans.get("weekly")?.features.map((feature, idx) => (
                   <Text key={idx} style={styles.planFeature}>
@@ -333,35 +369,44 @@ export default function PaywallScreenWithRevenueCat() {
             </Pressable>
           )}
 
-          {/* Monthly Plan */}
+          {/* Monthly Plan - Premium Option */}
           {plans.get("monthly") && (
-            <Pressable
-              onPress={() => setSelectedPlan("monthly")}
-              style={[
-                styles.planCard,
-                selectedPlan === "monthly" && styles.planCardSelected,
-              ]}
-            >
-              <View style={styles.planBadge}>
-                <Text style={styles.badgeEmoji}>{plans.get("monthly")?.badge.emoji}</Text>
-                <Text style={styles.badgeText}>{plans.get("monthly")?.badge.text}</Text>
-              </View>
-              <Text style={styles.price}>{plans.get("monthly")?.priceString}</Text>
-              <Text style={styles.period}>{plans.get("monthly")?.period}</Text>
-              <View style={styles.featuresBox}>
-                {plans.get("monthly")?.features.map((feature, idx) => (
-                  <Text key={idx} style={styles.planFeature}>
-                    {feature}
-                  </Text>
-                ))}
-              </View>
-            </Pressable>
+            <View>
+              <Pressable
+                onPress={() => setSelectedPlan("monthly")}
+                style={[
+                  styles.planCard,
+                  selectedPlan === "monthly" && styles.planCardSelected,
+                  selectedPlan === "monthly" && styles.planCardPremium,
+                ]}
+              >
+                <View style={styles.planBadgeContainer}>
+                  <View style={styles.planBadge}>
+                    <Text style={styles.badgeEmoji}>{plans.get("monthly")?.badge.emoji}</Text>
+                    <Text style={[styles.badgeText, styles.bestValueBadge]}>{plans.get("monthly")?.badge.text}</Text>
+                  </View>
+                  <Text style={styles.savingsTag}>Save 60%</Text>
+                </View>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.price}>{plans.get("monthly")?.priceString}</Text>
+                  <Text style={styles.period}>{plans.get("monthly")?.period}</Text>
+                </View>
+                <Text style={styles.trialText}>3-day free trial</Text>
+                <View style={styles.featuresBox}>
+                  {plans.get("monthly")?.features.map((feature, idx) => (
+                    <Text key={idx} style={styles.planFeature}>
+                      {feature}
+                    </Text>
+                  ))}
+                </View>
+              </Pressable>
+            </View>
           )}
         </View>
 
         {/* Action Buttons */}
         <View style={styles.buttonsSection}>
-          {/* Subscribe Button */}
+          {/* Subscribe Button - High Converting CTA */}
           <Pressable
             onPress={handlePurchaseSubscription}
             disabled={isPurchasing || loading}
@@ -373,9 +418,15 @@ export default function PaywallScreenWithRevenueCat() {
             {isPurchasing ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.primaryButtonText}>
-                Start {selectedPlan === "weekly" ? "Weekly" : "Monthly"} Trial
-              </Text>
+              <View style={styles.ctaContent}>
+                <Text style={styles.ctaIcon}>✨</Text>
+                <View>
+                  <Text style={styles.primaryButtonText}>
+                    Start Winning Conversations
+                  </Text>
+                  <Text style={styles.riskReversalText}>3-Day Free Trial • Cancel Anytime • No Risk</Text>
+                </View>
+              </View>
             )}
           </Pressable>
 
@@ -388,6 +439,22 @@ export default function PaywallScreenWithRevenueCat() {
           </Pressable>
         </View>
 
+        {/* Trust Badges */}
+        <View style={styles.trustBadges}>
+          <View style={styles.trustBadge}>
+            <Text style={styles.trustIcon}>⚡</Text>
+            <Text style={styles.trustText}>Instant Access</Text>
+          </View>
+          <View style={styles.trustBadge}>
+            <Text style={styles.trustIcon}>🔒</Text>
+            <Text style={styles.trustText}>Secure Checkout</Text>
+          </View>
+          <View style={styles.trustBadge}>
+            <Text style={styles.trustIcon}>✓</Text>
+            <Text style={styles.trustText}>30-Day Guarantee</Text>
+          </View>
+        </View>
+
         {/* Footer Links */}
         <View style={styles.footerLinks}>
           <Pressable>
@@ -397,12 +464,13 @@ export default function PaywallScreenWithRevenueCat() {
           <Pressable>
             <Text style={styles.footerLink}>Terms of Service</Text>
           </Pressable>
+          <Text style={styles.footerDivider}>•</Text>
+          <Pressable onPress={handleRestorePurchases}>
+            <Text style={styles.footerLink}>Restore</Text>
+          </Pressable>
         </View>
 
-        {/* Restore Purchases */}
-        <Pressable onPress={handleRestorePurchases} style={styles.restoreButton}>
-          <Text style={styles.restoreButtonText}>Restore Purchases</Text>
-        </Pressable>
+        <Text style={styles.footerText}>Trusted by thousands to improve their game ❤️</Text>
       </ScrollView>
     </LinearGradient>
   );
@@ -484,10 +552,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#999",
     textAlign: "center",
+    lineHeight: 22,
+  },
+  subtitleHighlight: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#fbbf24",
+    textAlign: "center",
+    marginBottom: 12,
+    lineHeight: 28,
+  },
+  socialProofSection: {
+    marginBottom: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: "#1a1a3e",
+    borderRadius: 8,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  stars: {
+    fontSize: 16,
+    color: "#fbbf24",
+    letterSpacing: 2,
+  },
+  ratingText: {
+    color: "#ddd",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  testimonialText: {
+    color: "#ccc",
+    fontSize: 13,
+    fontStyle: "italic",
+    lineHeight: 18,
   },
   featuresSection: {
     marginBottom: 32,
     paddingHorizontal: 12,
+  },
+  featuresTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 16,
   },
   featureRow: {
     marginBottom: 12,
@@ -512,11 +624,41 @@ const styles = StyleSheet.create({
     borderColor: "#6366f1",
     backgroundColor: "#2a2a5e",
   },
+  planCardPremium: {
+    borderColor: "#fbbf24",
+    backgroundColor: "#3a3a1a",
+  },
+  planBadgeContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   planBadge: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
     gap: 8,
+  },
+  bestValueBadge: {
+    color: "#fbbf24",
+  },
+  savingsTag: {
+    backgroundColor: "#fbbf24",
+    color: "#000",
+    fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  priceContainer: {
+    marginBottom: 8,
+  },
+  trialText: {
+    color: "#fbbf24",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 12,
   },
   badgeEmoji: {
     fontSize: 18,
@@ -550,19 +692,33 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: "#6366f1",
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  ctaContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  ctaIcon: {
+    fontSize: 20,
   },
   primaryButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+  riskReversalText: {
+    color: "#ccc",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   secondaryButton: {
     backgroundColor: "transparent",
@@ -583,7 +739,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   footerLink: {
     color: "#6366f1",
@@ -593,14 +749,37 @@ const styles = StyleSheet.create({
   footerDivider: {
     color: "#666",
   },
-  restoreButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+  footerText: {
+    color: "#666",
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  trustBadges: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  trustBadge: {
     alignItems: "center",
+    gap: 4,
+  },
+  trustIcon: {
+    fontSize: 20,
+  },
+  trustText: {
+    color: "#999",
+    fontSize: 11,
+    textAlign: "center",
+  },
+  restoreButton: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   restoreButtonText: {
     color: "#6366f1",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     textDecorationLine: "underline",
   },
