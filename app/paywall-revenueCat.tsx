@@ -35,18 +35,18 @@ import { Colors } from "@/constants/colors";
 
 // Social proof & trust elements
 const SOCIAL_PROOF = {
-  userCount: "50,000+",
+  userCount: "early",
   rating: "5.0",
-  testimonial: "I stopped getting left on read.",
-  testimonialAuthor: "Jake, 22",
+  testimonial: " stopped getting left on read.",
+  testimonialAuthor: "Dave, 19",
 };
 
 const FEATURE_BENEFITS = [
-  "✨ Get instant, AI-powered replies in seconds",
-  "🎯 Match your vibe—choose any tone you want",
-  "💬 Never run out of things to say again",
-  "🔥 Turn boring chats into engaging conversations",
-  "🚀 Works on Tinder, Instagram, WhatsApp & more",
+  "Get instant, AI-powered replies in seconds",
+  "Match your vibe—choose any tone you want",
+  "Never run out of things to say again",
+  "Turn boring chats into engaging conversations",
+  "Works on Tinder, Instagram, WhatsApp & more",
 ];
 
 interface PlanData {
@@ -180,41 +180,46 @@ export default function PaywallScreenWithRevenueCat() {
    * NOT a custom Google Play UI - only the system confirmation
    */
   const handlePurchaseSubscription = async () => {
-    if (isPurchasing) return;
+    if (isPurchasing) {
+      console.log("[Paywall] Purchase already in progress, ignoring tap");
+      return;
+    }
 
     const selectedPlanData = plans.get(selectedPlan);
     if (!selectedPlanData) {
+      console.error("[Paywall] Plan not found:", selectedPlan);
       Alert.alert("Error", "Plan not found. Please try again.");
       return;
     }
 
     const packageID = selectedPlanData.id;
+    console.log("[Paywall] User tapped purchase button for:", packageID);
 
     setIsPurchasing(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       console.log("[Paywall] Starting purchase for:", packageID);
 
       const success = await purchase(packageID);
 
       if (success) {
-        console.log("[Paywall] Purchase completed successfully, navigating to home...");
+        console.log("[Paywall] ✓ Purchase completed successfully!");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Success! 🎉", "Welcome to GhostReply Pro!");
         await setHasOnboarded(true);
-        router.replace("/home");
+        
+        // Small delay to ensure navigation happens
+        setTimeout(() => {
+          router.replace("/home");
+        }, 500);
       } else {
-        // Purchase failed or was cancelled
-        // Only show alert if it was an actual error, not a user cancellation
-        console.log("[Paywall] Purchase did not complete");
-        // Don't show alert here - the context handles logging
+        // Purchase failed or was cancelled - don't show alert for cancellations
+        console.log("[Paywall] Purchase did not complete (likely user cancelled)");
       }
     } catch (error) {
       console.error("[Paywall] Purchase error:", error);
-      Alert.alert(
-        "Purchase Error",
-        "Something went wrong during purchase. Please try again."
-      );
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      Alert.alert("Purchase Error", `Something went wrong: ${errorMsg}`);
     } finally {
       setIsPurchasing(false);
     }
@@ -223,12 +228,24 @@ export default function PaywallScreenWithRevenueCat() {
   /**
    * Continue with free plan
    * Does NOT call RevenueCat - just navigates to home as free-tier user
+   * This is a simple navigation, no subscription logic needed
    */
   const handleContinueWithFree = async () => {
-    console.log("[Paywall] User continuing with free plan");
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await setHasOnboarded(true);
-    router.replace("/home");
+    try {
+      console.log("[Paywall] User tapped free plan button");
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      
+      console.log("[Paywall] Marking onboarded and navigating to home...");
+      await setHasOnboarded(true);
+      
+      // Small delay to ensure state update completes
+      setTimeout(() => {
+        router.replace("/home");
+      }, 300);
+    } catch (error) {
+      console.error("[Paywall] Error in free plan flow:", error);
+      Alert.alert("Error", "Could not continue. Please try again.");
+    }
   };
 
   /**
@@ -324,7 +341,7 @@ export default function PaywallScreenWithRevenueCat() {
         <View style={styles.socialProofSection}>
           <View style={styles.ratingRow}>
             <Text style={styles.stars}>★★★★★</Text>
-            <Text style={styles.ratingText}>Trusted by {SOCIAL_PROOF.userCount} users</Text>
+            <Text style={styles.ratingText}>Trusted by {SOCIAL_PROOF.userCount}</Text>
           </View>
           <Text style={styles.testimonialText}>\"{SOCIAL_PROOF.testimonial}\" — {SOCIAL_PROOF.testimonialAuthor}</Text>
         </View>
@@ -409,11 +426,12 @@ export default function PaywallScreenWithRevenueCat() {
           {/* Subscribe Button - High Converting CTA */}
           <Pressable
             onPress={handlePurchaseSubscription}
-            disabled={isPurchasing || loading}
+            disabled={isPurchasing}
             style={[
               styles.primaryButton,
-              (isPurchasing || loading) && styles.buttonDisabled,
+              isPurchasing && styles.buttonDisabled,
             ]}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {isPurchasing ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -434,13 +452,14 @@ export default function PaywallScreenWithRevenueCat() {
           <Pressable
             onPress={handleContinueWithFree}
             style={styles.secondaryButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.secondaryButtonText}>Continue with Free Plan</Text>
           </Pressable>
         </View>
 
         {/* Trust Badges */}
-        <View style={styles.trustBadges}>
+        <View style={styles.trustBadges} pointerEvents="none">
           <View style={styles.trustBadge}>
             <Text style={styles.trustIcon}>⚡</Text>
             <Text style={styles.trustText}>Instant Access</Text>
@@ -457,20 +476,20 @@ export default function PaywallScreenWithRevenueCat() {
 
         {/* Footer Links */}
         <View style={styles.footerLinks}>
-          <Pressable>
+          <Pressable onPress={() => console.log("Privacy Policy")} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
             <Text style={styles.footerLink}>Privacy Policy</Text>
           </Pressable>
           <Text style={styles.footerDivider}>•</Text>
-          <Pressable>
+          <Pressable onPress={() => console.log("Terms")} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
             <Text style={styles.footerLink}>Terms of Service</Text>
           </Pressable>
           <Text style={styles.footerDivider}>•</Text>
-          <Pressable onPress={handleRestorePurchases}>
+          <Pressable onPress={handleRestorePurchases} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
             <Text style={styles.footerLink}>Restore</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.footerText}>Trusted by thousands to improve their game ❤️</Text>
+        <Text style={styles.footerText} pointerEvents="none">Trusted by thousands to improve their game ❤️</Text>
       </ScrollView>
     </LinearGradient>
   );
@@ -581,9 +600,9 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   ratingText: {
-    color: "#ddd",
-    fontSize: 13,
-    fontWeight: "600",
+    color: "#fbbf24",
+    fontSize: 16,
+    fontWeight: "700",
   },
   testimonialText: {
     color: "#ccc",
@@ -692,19 +711,22 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: "#6366f1",
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 70,
   },
   ctaContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    width: "100%",
   },
   ctaIcon: {
-    fontSize: 20,
+    fontSize: 24,
+    marginRight: 4,
   },
   primaryButtonText: {
     color: "#fff",
@@ -718,16 +740,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   secondaryButton: {
     backgroundColor: "transparent",
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: "#6366f1",
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 56,
   },
   secondaryButtonText: {
     color: "#6366f1",
