@@ -48,7 +48,11 @@ function RootLayoutWithApp() {
   useEffect(() => {
     const setupRevenueCat = async () => {
       try {
-        await initializeRevenueCat();
+        if (!deviceId) {
+          console.log('[RevenueCat] Waiting for deviceId...');
+          return;
+        }
+        await initializeRevenueCat(deviceId);
         console.log('[RevenueCat] SDK initialized successfully');
       } catch (error) {
         console.error('[RevenueCat] Initialization failed:', error);
@@ -57,7 +61,7 @@ function RootLayoutWithApp() {
     };
 
     setupRevenueCat();
-  }, []);
+  }, [deviceId]);
 
   // Initialize notification system on app start
   useEffect(() => {

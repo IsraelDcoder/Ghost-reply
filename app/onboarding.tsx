@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -21,32 +21,70 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const SLIDES = [
   {
+    id: "0",
+    type: "splash",
+    gradient: ["#0B0B1A", "#0B0B1A", "#0B0B1A"] as const,
+  },
+  {
     id: "1",
-    emoji: "💬",
-    title: "Never struggle with\nreplies again",
+    emoji: "👻",
+    title: "Ghost Reply",
     subtitle:
-      "Let AI craft the perfect message for any conversation. Upload a screenshot or paste text.",
+      "Never overthink a text again. AI-powered replies for any conversation — from dating apps to professional messages.",
     gradient: ["#0A0A1A", "#0F0F2E", "#1A0A2E"] as const,
     accentColor: "#7B6CFF",
+    context: "What is Ghost Reply?",
   },
   {
     id: "2",
-    emoji: "📸",
-    title: "Screenshot or\npaste text",
+    emoji: "📍",
+    title: "The Problem",
     subtitle:
-      "Upload your chat screenshot and our AI extracts the context to craft personalized replies.",
-    gradient: ["#0A0A1A", "#0F1A2E", "#0A1A2E"] as const,
-    accentColor: "#4ECDC4",
+      "Struggling to respond? Worried your message won't land right? Spending too much time crafting the perfect reply?",
+    gradient: ["#0A0A1A", "#1A0F2E", "#0F1A2E"] as const,
+    accentColor: "#FF6B9D",
+    context: "You're not alone",
+    details: ["Blank screen anxiety", "Fear of saying the wrong thing", "Analysis paralysis"],
   },
   {
     id: "3",
-    emoji: "🔥",
-    title: "Win conversations\nwith confidence",
+    emoji: "⚡",
+    title: "The Solution",
     subtitle:
-      "Choose your tone — Confident, Flirty, Funny, Savage, or Smart. Always have the perfect comeback.",
+      "Snap a screenshot or paste text. Our AI reads the context and generates replies that match your personality.",
+    gradient: ["#0A0A1A", "#0F1A2E", "#1A0A2E"] as const,
+    accentColor: "#4ECDC4",
+    context: "How it works",
+  },
+  {
+    id: "4",
+    emoji: "🎯",
+    title: "Choose Your Tone",
+    subtitle:
+      "Every reply can be perfectly calibrated. Want to be confident? Funny? Flirty? We've got the tone for you.",
     gradient: ["#0A0A1A", "#1A0A1A", "#2E0A1A"] as const,
-    accentColor: "#FF6B9D",
+    accentColor: "#FFD700",
     tones: ["😎 Confident", "😏 Flirty", "😂 Funny", "🔥 Savage", "🧠 Smart"],
+  },
+  {
+    id: "5",
+    emoji: "💡",
+    title: "Where to Use It",
+    subtitle:
+      "Tinder, Bumble, Instagram DMs, WhatsApp, professional emails — any chat app where words matter.",
+    gradient: ["#0A0A1A", "#0F1A2E", "#1A0F2E"] as const,
+    accentColor: "#FF6B9D",
+    useCases: ["Dating apps", "Text messages", "Professional replies", "Social media DMs"],
+  },
+  {
+    id: "6",
+    emoji: "🚀",
+    title: "Ready to\ncraft better replies?",
+    subtitle:
+      "Get unlimited access to AI-powered replies that actually convert. Start free, upgrade anytime.",
+    gradient: ["#1A0A2E", "#0F0F2E", "#0A0A1A"] as const,
+    accentColor: "#7B6CFF",
+    context: "Let's go",
   },
 ];
 
@@ -101,38 +139,83 @@ export default function OnboardingScreen() {
           const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCurrentIndex(index);
         }}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-            <View style={styles.slideContent}>
-              <View
-                style={[
-                  styles.emojiContainer,
-                  { backgroundColor: item.accentColor + "20", borderColor: item.accentColor + "40" },
-                ]}
-              >
-                <Text style={styles.emoji}>{item.emoji}</Text>
-              </View>
-
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.subtitle}>{item.subtitle}</Text>
-
-              {item.tones && (
-                <View style={styles.tonesContainer}>
-                  {item.tones.map((tone: string, i: number) => (
-                    <View
-                      key={i}
-                      style={[styles.toneChip, { borderColor: item.accentColor + "60" }]}
-                    >
-                      <Text style={[styles.toneText, { color: item.accentColor }]}>
-                        {tone}
-                      </Text>
-                    </View>
-                  ))}
+        renderItem={({ item }: any) => {
+          if (item.type === "splash") {
+            return (
+              <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: "#0B0B1A" }]}>
+                <LinearGradient
+                  colors={["rgba(236, 72, 153, 0.2)", "rgba(139, 92, 246, 0.1)"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.gradientOverlay}
+                />
+                <View style={styles.splashContent}>
+                  <Text style={styles.splashTitle}>GHOSTREPLY</Text>
+                  <Text style={styles.splashSubtitle}>AI-Powered Replies</Text>
                 </View>
-              )}
+              </View>
+            );
+          }
+          return (
+            <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
+              <View style={styles.slideContent}>
+                {item.context && (
+                  <Text style={styles.contextText}>{item.context}</Text>
+                )}
+                
+                <View
+                  style={[
+                    styles.emojiContainer,
+                    { backgroundColor: item.accentColor + "20", borderColor: item.accentColor + "40" },
+                  ]}
+                >
+                  <Text style={styles.emoji}>{item.emoji}</Text>
+                </View>
+
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.subtitle}>{item.subtitle}</Text>
+
+                {item.details && (
+                  <View style={styles.detailsContainer}>
+                    {item.details.map((detail: string, i: number) => (
+                      <View key={i} style={styles.detailRow}>
+                        <Text style={[styles.detailBullet, { color: item.accentColor }]}>•</Text>
+                        <Text style={styles.detailText}>{detail}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {item.tones && (
+                  <View style={styles.tonesContainer}>
+                    {item.tones.map((tone: string, i: number) => (
+                      <View
+                        key={i}
+                        style={[styles.toneChip, { borderColor: item.accentColor + "60" }]}
+                      >
+                        <Text style={[styles.toneText, { color: item.accentColor }]}>
+                          {tone}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {item.useCases && (
+                  <View style={styles.useCasesContainer}>
+                    {item.useCases.map((useCase: string, i: number) => (
+                      <View key={i} style={styles.useCaseChip}>
+                        <Text style={[styles.useCaseText, { color: item.accentColor }]}>
+                          ✓ {useCase}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
 
       <View
@@ -295,5 +378,76 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     color: "#5A5A7A",
+  },
+  contextText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: "#7B7BA0",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  detailsContainer: {
+    gap: 10,
+    marginTop: 12,
+    alignItems: "flex-start",
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  detailBullet: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  detailText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: "#C4C4D6",
+    flex: 1,
+  },
+  useCasesContainer: {
+    gap: 10,
+    marginTop: 12,
+    width: "100%",
+  },
+  useCaseChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  useCaseText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  splashContent: {
+    alignItems: "center",
+    zIndex: 10,
+  },
+  splashTitle: {
+    fontSize: 72,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -2,
+    textAlign: "center",
+    lineHeight: 80,
+  },
+  splashSubtitle: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#EC4899",
+    marginTop: 16,
+    letterSpacing: 1,
+  },
+  gradientOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: "none",
   },
 });
