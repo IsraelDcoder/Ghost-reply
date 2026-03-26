@@ -63,7 +63,7 @@ interface PlanData {
 
 export default function PaywallScreenWithRevenueCat() {
   const insets = useSafeAreaInsets();
-  const { startTrial, subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall } =
+  const { startTrial, subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall, refreshSubscriptionStatus } =
     useSubscription();
   const { setHasOnboarded } = useApp();
 
@@ -204,6 +204,7 @@ export default function PaywallScreenWithRevenueCat() {
 
       if (success) {
         console.log("[Paywall] ✓ Purchase completed successfully!");
+        await refreshSubscriptionStatus();
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Success! 🎉", "Welcome to GhostReply Pro!");
         // setHasOnboarded is async and persists to storage - MUST await it

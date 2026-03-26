@@ -132,6 +132,35 @@ export default function HistoryScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <LinearGradient colors={["#0A0A1A", "#0F0F2E"]} style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </Pressable>
+          <Text style={styles.title}>History</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color="#FF6B9D40" />
+          <Text style={styles.emptyText}>Failed to load history</Text>
+          <Text style={styles.emptySubtext}>Please check your connection and try again</Text>
+          <Pressable onPress={() => refetch()} style={styles.createBtn}>
+            <LinearGradient
+              colors={["#7B6CFF", "#5A4DBF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradient}
+            >
+              <Text style={styles.createBtnText}>Retry</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </LinearGradient>
+    );
+  }
+
   const conversations = (data || []) as Conversation[];
 
   return (

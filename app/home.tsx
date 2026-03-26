@@ -11,7 +11,7 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +39,15 @@ export default function HomeScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom, 20);
+
+  // Refresh subscription status when screen comes into focus
+  // This ensures premium status is always up-to-date after returning from paywall
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("[Home] Screen focused - refreshing subscription status");
+      refreshSubscriptionStatus();
+    }, [refreshSubscriptionStatus])
+  );
 
   // Check if user can analyze based on subscription context (trial/paid) and backend daily limit
   const canAnalyze = subscriptionStatus?.isSubscribed ? true : ((dailyLimit?.remaining ?? 0) > 0);
