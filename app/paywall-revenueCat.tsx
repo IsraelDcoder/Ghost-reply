@@ -22,6 +22,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,16 +38,14 @@ import { Colors } from "@/constants/colors";
 const SOCIAL_PROOF = {
   userCount: "early",
   rating: "5.0",
-  testimonial: " stopped getting left on read.",
-  testimonialAuthor: "Dave, 19",
+  testimonial: "GhostReply got me 7 dates in one week.",
+  testimonialAuthor: "Chidi, Lagos",
 };
 
 const FEATURE_BENEFITS = [
-  "Get instant, AI-powered replies in seconds",
-  "Match your vibe—choose any tone you want",
-  "Never run out of things to say again",
-  "Turn boring chats into engaging conversations",
-  "Works on Tinder, Instagram, WhatsApp & more",
+  "✨ Match Your Vibe",
+  "✨ The Ultimate Edge",
+  "✨ Proven to Get Replies & Dates",
 ];
 
 interface PlanData {
@@ -338,23 +337,17 @@ export default function PaywallScreenWithRevenueCat() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.ghostEmoji}>👻</Text>
-          <Text style={styles.mainTitle}>Stop Getting Ignored.</Text>
-          <Text style={styles.subtitleHighlight}>Text Like You Actually Know What You're Doing.</Text>
-          <Text style={styles.subtitle}>AI generates perfect replies in seconds — so you never get ghosted again.</Text>
+          <Text style={styles.mainTitle}>INFINITE.{"\n"}REPLIES.</Text>
         </View>
 
         {/* Social Proof Section */}
         <View style={styles.socialProofSection}>
-          <View style={styles.ratingRow}>
-            <Text style={styles.stars}>★★★★★</Text>
-            <Text style={styles.ratingText}>Trusted by {SOCIAL_PROOF.userCount}</Text>
-          </View>
+
           <Text style={styles.testimonialText}>\"{SOCIAL_PROOF.testimonial}\" — {SOCIAL_PROOF.testimonialAuthor}</Text>
         </View>
 
         {/* Feature Highlights */}
         <View style={styles.featuresSection}>
-          <Text style={styles.featuresTitle}>Why GhostReply Pro?</Text>
           {FEATURE_BENEFITS.map((benefit, idx) => (
             <View key={idx} style={styles.featureRow}>
               <Text style={styles.featureText}>{benefit}</Text>
@@ -373,6 +366,7 @@ export default function PaywallScreenWithRevenueCat() {
                 selectedPlan === "weekly" && styles.planCardSelected,
               ]}
             >
+              <Text style={styles.planName}>GhostReply Pro Weekly</Text>
               <View style={styles.planBadge}>
                 <Text style={styles.badgeEmoji}>{plans.get("weekly")?.badge.emoji}</Text>
                 <Text style={styles.badgeText}>{plans.get("weekly")?.badge.text}</Text>
@@ -403,12 +397,18 @@ export default function PaywallScreenWithRevenueCat() {
                   selectedPlan === "monthly" && styles.planCardPremium,
                 ]}
               >
+                {selectedPlan === "monthly" && (
+                  <View style={styles.checkmarkContainer}>
+                    <Text style={styles.checkmark}>✓</Text>
+                  </View>
+                )}
+                <Text style={styles.planName}>GhostReply Pro Monthly</Text>
                 <View style={styles.planBadgeContainer}>
                   <View style={styles.planBadge}>
                     <Text style={styles.badgeEmoji}>{plans.get("monthly")?.badge.emoji}</Text>
                     <Text style={[styles.badgeText, styles.bestValueBadge]}>{plans.get("monthly")?.badge.text}</Text>
                   </View>
-                  <Text style={styles.savingsTag}>Save 60%</Text>
+                  <Text style={styles.savingsTag}>Save 67%</Text>
                 </View>
                 <View style={styles.priceContainer}>
                   <Text style={styles.price}>{plans.get("monthly")?.priceString}</Text>
@@ -443,13 +443,7 @@ export default function PaywallScreenWithRevenueCat() {
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <View style={styles.ctaContent}>
-                <Text style={styles.ctaIcon}>✨</Text>
-                <View>
-                  <Text style={styles.primaryButtonText}>
-                    Start Winning Conversations
-                  </Text>
-                  <Text style={styles.riskReversalText}>3-Day Free Trial • Cancel Anytime • No Risk</Text>
-                </View>
+                <Text style={styles.primaryButtonText}>🔒 Unlock Selected Plan</Text>
               </View>
             )}
           </Pressable>
@@ -464,38 +458,26 @@ export default function PaywallScreenWithRevenueCat() {
           </Pressable>
         </View>
 
-        {/* Trust Badges */}
-        <View style={styles.trustBadges} pointerEvents="none">
-          <View style={styles.trustBadge}>
-            <Text style={styles.trustIcon}>⚡</Text>
-            <Text style={styles.trustText}>Instant Access</Text>
-          </View>
-          <View style={styles.trustBadge}>
-            <Text style={styles.trustIcon}>🔒</Text>
-            <Text style={styles.trustText}>Secure Checkout</Text>
-          </View>
-          <View style={styles.trustBadge}>
-            <Text style={styles.trustIcon}>✓</Text>
-            <Text style={styles.trustText}>30-Day Guarantee</Text>
-          </View>
-        </View>
-
         {/* Footer Links */}
         <View style={styles.footerLinks}>
-          <Pressable onPress={() => console.log("Privacy Policy")} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
-            <Text style={styles.footerLink}>Privacy Policy</Text>
+          <Pressable 
+            onPress={() => Linking.openURL("mailto:theonyekachithompson@gmail.com")}
+            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+          >
+            <Text style={styles.footerLink}>Email</Text>
           </Pressable>
-          <Text style={styles.footerDivider}>•</Text>
-          <Pressable onPress={() => console.log("Terms")} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
-            <Text style={styles.footerLink}>Terms of Service</Text>
+          <Text style={styles.footerDivider}>·</Text>
+          <Pressable 
+            onPress={() => Linking.openURL("https://ghostreply-app.netlify.app/")}
+            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+          >
+            <Text style={styles.footerLink}>Terms</Text>
           </Pressable>
-          <Text style={styles.footerDivider}>•</Text>
+          <Text style={styles.footerDivider}>·</Text>
           <Pressable onPress={handleRestorePurchases} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
             <Text style={styles.footerLink}>Restore</Text>
           </Pressable>
         </View>
-
-        <Text style={styles.footerText} pointerEvents="none">Trusted by thousands to improve their game ❤️</Text>
       </ScrollView>
     </LinearGradient>
   );
@@ -619,6 +601,9 @@ const styles = StyleSheet.create({
   featuresSection: {
     marginBottom: 32,
     paddingHorizontal: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
   },
   featuresTitle: {
     color: "#fff",
@@ -627,7 +612,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   featureRow: {
-    marginBottom: 12,
+    flex: 1,
+    minWidth: "45%",
+    marginBottom: 0,
   },
   featureText: {
     color: "#ddd",
@@ -644,6 +631,29 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 2,
     borderColor: "#333",
+    position: "relative",
+  },
+  planName: {
+    color: "#c4b5fd",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  checkmarkContainer: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "#6366f1",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkmark: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
   },
   planCardSelected: {
     borderColor: "#6366f1",
