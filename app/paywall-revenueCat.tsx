@@ -42,12 +42,6 @@ const SOCIAL_PROOF = {
   testimonialAuthor: "Chidi, Lagos",
 };
 
-const FEATURE_BENEFITS = [
-  "✨ Match Your Vibe",
-  "✨ The Ultimate Edge",
-  "✨ Proven to Get Replies & Dates",
-];
-
 interface PlanData {
   id: string;
   type: "weekly" | "monthly";
@@ -62,7 +56,7 @@ interface PlanData {
 
 export default function PaywallScreenWithRevenueCat() {
   const insets = useSafeAreaInsets();
-  const { startTrial, subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall, refreshSubscriptionStatus } =
+  const { subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall, refreshSubscriptionStatus } =
     useSubscription();
   const { setHasOnboarded } = useApp();
 
@@ -122,8 +116,9 @@ export default function PaywallScreenWithRevenueCat() {
             period: "/week",
             badge: { emoji: "🔥", text: "Most Popular" },
             features: [
-              "• 2-3 day trial first",
-              "• Cancel anytime",
+              "✓ Unlock unlimited replies daily",
+              "✓ Save hours of overthinking messages",
+              "✓ Impress friends with quick, clever responses",
             ],
           });
         } else if (isMonthly) {
@@ -134,9 +129,9 @@ export default function PaywallScreenWithRevenueCat() {
             period: "/month",
             badge: { emoji: "💎", text: "Best Value" },
             features: [
-              "• 3-day free trial",
-              "• 17% savings",
-              "• Cancel anytime",
+              "✓ All weekly benefits",
+              "✓ Personal AI that adapts to your style",
+              "✓ Be the first to respond, every time",
             ],
           });
         }
@@ -160,27 +155,6 @@ export default function PaywallScreenWithRevenueCat() {
   useEffect(() => {
     fetchOfferings();
   }, [fetchOfferings]);
-
-  /**
-   * Start free trial via backend
-   */
-  const handleStartTrial = async () => {
-    if (subscriptionStatus?.isTrialActive || subscriptionStatus?.isSubscribed) {
-      return;
-    }
-
-    if (loading) return;
-
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await startTrial();
-      await setHasOnboarded(true);
-      router.replace("/home");
-    } catch (error) {
-      Alert.alert("Error", "Failed to start trial. Please try again.");
-      console.error("[Paywall] Trial error:", error);
-    }
-  };
 
   /**
    * Handle subscription purchase via RevenueCat
@@ -351,17 +325,7 @@ export default function PaywallScreenWithRevenueCat() {
 
         {/* Social Proof Section */}
         <View style={styles.socialProofSection}>
-
           <Text style={styles.testimonialText}>\"{SOCIAL_PROOF.testimonial}\" — {SOCIAL_PROOF.testimonialAuthor}</Text>
-        </View>
-
-        {/* Feature Highlights */}
-        <View style={styles.featuresSection}>
-          {FEATURE_BENEFITS.map((benefit, idx) => (
-            <View key={idx} style={styles.featureRow}>
-              <Text style={styles.featureText}>{benefit}</Text>
-            </View>
-          ))}
         </View>
 
         {/* Plans - From RevenueCat Offerings */}
@@ -375,7 +339,7 @@ export default function PaywallScreenWithRevenueCat() {
                 selectedPlan === "weekly" && styles.planCardSelected,
               ]}
             >
-              <Text style={styles.planName}>GhostReply Pro Weekly</Text>
+              <Text style={styles.planHeadline}>Instant Smart Replies Every Day</Text>
               <View style={styles.planBadge}>
                 <Text style={styles.badgeEmoji}>{plans.get("weekly")?.badge.emoji}</Text>
                 <Text style={styles.badgeText}>{plans.get("weekly")?.badge.text}</Text>
@@ -384,7 +348,7 @@ export default function PaywallScreenWithRevenueCat() {
                 <Text style={styles.price}>{plans.get("weekly")?.priceString}</Text>
                 <Text style={styles.period}>{plans.get("weekly")?.period}</Text>
               </View>
-              <Text style={styles.trialText}>2-3 day free trial</Text>
+              <Text style={styles.pricingNote}>— Cancel anytime</Text>
               <View style={styles.featuresBox}>
                 {plans.get("weekly")?.features.map((feature, idx) => (
                   <Text key={idx} style={styles.planFeature}>
@@ -411,19 +375,18 @@ export default function PaywallScreenWithRevenueCat() {
                     <Text style={styles.checkmark}>✓</Text>
                   </View>
                 )}
-                <Text style={styles.planName}>GhostReply Pro Monthly</Text>
+                <Text style={styles.planHeadline}>Level Up Your Messaging Game</Text>
                 <View style={styles.planBadgeContainer}>
                   <View style={styles.planBadge}>
                     <Text style={styles.badgeEmoji}>{plans.get("monthly")?.badge.emoji}</Text>
                     <Text style={[styles.badgeText, styles.bestValueBadge]}>{plans.get("monthly")?.badge.text}</Text>
                   </View>
-                  <Text style={styles.savingsTag}>Save 67%</Text>
                 </View>
                 <View style={styles.priceContainer}>
                   <Text style={styles.price}>{plans.get("monthly")?.priceString}</Text>
                   <Text style={styles.period}>{plans.get("monthly")?.period}</Text>
                 </View>
-                <Text style={styles.trialText}>3-day free trial</Text>
+                <Text style={styles.pricingNote}>— Unlimited access</Text>
                 <View style={styles.featuresBox}>
                   {plans.get("monthly")?.features.map((feature, idx) => (
                     <Text key={idx} style={styles.planFeature}>
@@ -452,18 +415,25 @@ export default function PaywallScreenWithRevenueCat() {
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <View style={styles.ctaContent}>
-                <Text style={styles.primaryButtonText}>🔒 Unlock Selected Plan</Text>
+                <Text style={styles.primaryButtonText}>
+                  {selectedPlan === "weekly" 
+                    ? "Upgrade Now → Get Unlimited Replies" 
+                    : "Upgrade Now → Unlock Full Power"}
+                </Text>
               </View>
             )}
           </Pressable>
+        </View>
 
-          {/* Continue Free Button */}
-          <Pressable
+        {/* Subtle Free Option at Bottom */}
+        <View style={styles.freeOptionSection}>
+          <Text style={styles.freeOptionText}>Want to try first?</Text>
+          <Pressable 
             onPress={handleContinueWithFree}
-            style={styles.secondaryButton}
+            style={styles.freeButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.secondaryButtonText}>Continue with Free Plan</Text>
+            <Text style={styles.freeButtonText}>Use 2 Free Replies Daily</Text>
           </Pressable>
         </View>
 
@@ -648,6 +618,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 12,
   },
+  planHeadline: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 12,
+    lineHeight: 24,
+  },
+  pricingNote: {
+    color: "#999",
+    fontSize: 13,
+    marginBottom: 12,
+    fontWeight: "500",
+  },
   checkmarkContainer: {
     position: "absolute",
     top: 12,
@@ -830,6 +813,25 @@ const styles = StyleSheet.create({
     color: "#6366f1",
     fontSize: 12,
     fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  freeOptionSection: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  freeOptionText: {
+    color: "#666",
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  freeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  freeButtonText: {
+    color: "#666",
+    fontSize: 12,
+    fontWeight: "500",
     textDecorationLine: "underline",
   },
 });

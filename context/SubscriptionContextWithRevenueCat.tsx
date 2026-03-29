@@ -58,7 +58,6 @@ interface SubscriptionContextType {
   isPro: boolean; // 🔥 EXPLICIT PRO STATE - use this in all limit checks
 
   // Actions
-  startTrial: () => Promise<void>;
   purchaseSubscription: (productID: string) => Promise<boolean>;
   restorePurchases: () => Promise<void>;
   refreshSubscriptionStatus: () => Promise<void>;
@@ -239,35 +238,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   /**
-   * Start free trial via backend
-   * RevenueCat handles paid subscriptions, backend handles trials
-   */
-  const startTrial = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log("[Subscription] Starting free trial...");
-
-      const response = await apiRequest("POST", "/api/subscription/start-trial");
-
-      if (!response.ok) {
-        throw new Error("Trial start failed");
-      }
-
-      // Refresh status to reflect trial
-      await refreshSubscriptionStatus();
-
-      console.log("[Subscription] Trial started successfully");
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Trial start failed";
-      console.error("[Subscription] Trial error:", errorMessage);
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [refreshSubscriptionStatus]);
-
-  /**
    * Purchase a subscription via RevenueCat
    * 🔥 CRITICAL: Immediately refreshes entitlements after successful purchase
    */
@@ -444,7 +414,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     loading,
     error,
     isPro, // 🔥 Export isPro state
-    startTrial,
     purchaseSubscription,
     restorePurchases: handleRestorePurchases,
     refreshSubscriptionStatus,
