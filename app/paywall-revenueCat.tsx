@@ -24,7 +24,7 @@ import {
   ActivityIndicator,
   Linking,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,6 +79,15 @@ export default function PaywallScreenWithRevenueCat() {
       router.replace("/home");
     }
   }, [shouldBypassPaywall]);
+
+  // 🔥 CRITICAL: Refresh subscription status every time paywall screen comes into focus
+  // This catches purchases that just completed and redirects to home
+  useFocusEffect(
+    useCallback(() => {
+      console.log("[Paywall] Screen focused - checking if user already has subscription...");
+      refreshSubscriptionStatus();
+    }, [refreshSubscriptionStatus])
+  );
 
   /**
    * Fetch available offerings from RevenueCat

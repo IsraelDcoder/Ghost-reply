@@ -30,7 +30,7 @@ import {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { incrementReplyCount } = useApp();
-  const { subscriptionStatus, dailyLimit, loading, canAnalyzeConversation, refreshSubscriptionStatus } = useSubscription();
+  const { subscriptionStatus, dailyLimit, loading, canAnalyzeConversation, refreshSubscriptionStatus, isPro } = useSubscription();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"paste" | "screenshot" | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -49,10 +49,12 @@ export default function HomeScreen() {
     }, [refreshSubscriptionStatus])
   );
 
-  // Check if user can analyze based on subscription context (trial/paid) and backend daily limit
-  const canAnalyze = subscriptionStatus?.isSubscribed ? true : ((dailyLimit?.remaining ?? 0) > 0);
-  // Use backend's daily limit, not local storage
-  const remainingReplies = subscriptionStatus?.isSubscribed ? Infinity : (dailyLimit?.remaining ?? 0);
+  // 🔥 NEW: Use explicit isPro state for clearer logic
+  // If user is PRO (paid or trial), they have unlimited access
+  // Otherwise, check backend daily limit for free users
+  const canAnalyze = isPro || ((dailyLimit?.remaining ?? 0) > 0);
+  // 🔥 NEW: Use isPro for remaining replies calculation
+  const remainingReplies = isPro ? Infinity : (dailyLimit?.remaining ?? 0);
 
   const handlePickImage = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -239,7 +241,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {!subscriptionStatus?.isSubscribed && (
+        {!isPro && (
           <Pressable
             onPress={() => router.push("/paywall")}
             style={styles.freeBanner}

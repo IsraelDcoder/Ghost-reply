@@ -55,6 +55,7 @@ interface SubscriptionContextType {
   dailyLimit: DailyLimitData | null;
   loading: boolean;
   error: string | null;
+  isPro: boolean; // 🔥 EXPLICIT PRO STATE - use this in all limit checks
 
   // Actions
   startTrial: () => Promise<void>;
@@ -80,6 +81,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [appState, setAppState] = useState(AppState.currentState);
+  const [isPro, setIsPro] = useState(false); // 🔥 Global PRO state
 
   /**
    * Initialize RevenueCat on app start
@@ -165,6 +167,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
       // Determine subscription state
       let status: SubscriptionStatus;
+      let isProUser = false; // 🔥 Track PRO status
 
       if (hasPremium) {
         // User has active premium entitlement
@@ -176,7 +179,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           plan: "premium",
           subscriptionExpiresAt: premiumEntitlement?.expirationDate ?? undefined,
         };
-        console.log("[Subscription] ✓ Premium subscription is ACTIVE");
+        isProUser = true; // 🔥 User is PRO
+        console.log("[Subscription] ✓ Premium subscription is ACTIVE - isPro = TRUE");
       } else if (Object.keys(customerInfo.entitlements.active).length === 0) {
         // No active entitlements - check backend for free trial
         try {
@@ -184,9 +188,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           const backendStatus = await backendStatusRes.json();
 
           status = backendStatus;
+          isProUser = backendStatus.isTrialActive; // 🔥 Trial users are also PRO
           console.log("[Subscription] Backend status:", {
             plan: backendStatus.plan,
             isTrialActive: backendStatus.isTrialActive,
+            isPro: isProUser,
           });
         } catch (err) {
           // Backend error - assume free tier
@@ -197,6 +203,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             isTrialActive: false,
             plan: "free",
           };
+          isProUser = false;
         }
       } else {
         status = {
@@ -205,9 +212,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           isTrialActive: false,
           plan: "free",
         };
+        isProUser = false;
       }
 
       setSubscriptionStatus(status);
+      setIsPro(isProUser); // 🔥 SET GLOBAL isPro STATE
 
       // Fetch daily limit from backend
       const limitRes = await apiRequest("GET", "/api/subscription/daily-limit");
@@ -260,13 +269,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   /**
    * Purchase a subscription via RevenueCat
+   * 🔥 CRITICAL: Immediately refreshes entitlements after successful purchase
    */
   const purchaseSubscription = useCallback(
     async (productID: string): Promise<boolean> => {
       try {
         setLoading(true);
         setError(null);
-        console.log("[Subscription] Attempting purchase:", productID);
+        console.log("[Subscription] 🔥 Attempting purchase:", productID);
 
         const result = await purchasePackage(productID);
 
@@ -281,26 +291,30 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           throw new Error(result.error || "Purchase failed");
         }
 
-        console.log("[Subscription] Purchase successful, verifying entitlement...");
+        console.log("[Subscription] 🔥 Purchase successful! Verifying entitlement...");
 
-        // Verify premium entitlement is active
+        // Verify premium entitlement is active from purchase response
         if (result.customerInfo) {
           const premiumEntitlement = result.customerInfo.entitlements.active[ENTITLEMENT_ID];
           
           if (premiumEntitlement) {
-            console.log("[Subscription] Premium entitlement confirmed:", {
+            console.log("[Subscription] 🔥 Premium entitlement confirmed in purchase response:", {
               entitlementID: ENTITLEMENT_ID,
               expirationDate: premiumEntitlement.expirationDate,
             });
           } else {
-            console.warn("[Subscription] Entitlement not yet in response, will refresh...");
+            console.warn("[Subscription] Entitlement not yet in response, waiting for sync...");
+            // Wait a bit for RevenueCat backend to sync
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
 
-        // Refresh subscription status to get latest entitlements
+        // 🔥 CRITICAL: Refresh subscription status immediately
+        // This ensures isPro is set to TRUE right after purchase
+        console.log("[Subscription] 🔥 Refreshing subscription status...");
         await refreshSubscriptionStatus();
 
-        console.log("[Subscription] Purchase flow complete, status refreshed");
+        console.log("[Subscription] 🔥 Purchase flow complete, status refreshed, isPro should be TRUE");
         return true;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Purchase failed";
@@ -371,14 +385,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   /**
    * Check if user can analyze a conversation
+   * 🔥 NEW: Uses explicit isPro state for immediate logic
    */
   const canAnalyzeConversation = (): boolean => {
-    if (subscriptionStatus?.isPaid || subscriptionStatus?.isTrialActive) {
-      return true; // Premium users have unlimited access
+    // 🔥 MAIN CHECK: If user is PRO (paid or trial), unlimited access
+    if (isPro) {
+      return true;
     }
 
+    // If not PRO, check daily limit for free users
     if (dailyLimit && dailyLimit.remaining > 0) {
-      return true; // Free users still have daily analyses left
+      return true;
     }
 
     return false; // No access
@@ -386,13 +403,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   /**
    * Get remaining analyses for the day
+   * 🔥 NEW: Uses explicit isPro state
    */
   const getRemainingAnalyses = (): number => {
-    if (subscriptionStatus?.isPaid || subscriptionStatus?.isTrialActive) {
-      return -1; // Unlimited
+    if (isPro) {
+      return -1; // Unlimited for PRO users
     }
 
-    return dailyLimit?.remaining ?? 0;
+    return dailyLimit?.remaining ?? 0; // Return daily limit for free users
   };
 
   /**
@@ -425,6 +443,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     dailyLimit,
     loading,
     error,
+    isPro, // 🔥 Export isPro state
     startTrial,
     purchaseSubscription,
     restorePurchases: handleRestorePurchases,
