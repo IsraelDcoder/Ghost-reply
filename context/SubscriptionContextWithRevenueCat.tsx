@@ -153,15 +153,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       // Fetch customer info for detailed subscription data
       const customerInfo = await getCustomerInfo();
 
-      console.log("[Subscription] RevenueCat response:", {
+      console.log("[Subscription] 🔍 DETAILED RevenueCat ENTITLEMENT CHECK:", {
+        entitlementIDLookedFor: ENTITLEMENT_ID,
         hasPremium,
         appUserID: customerInfo.originalAppUserId,
-        activeEntitlements: Object.keys(customerInfo.entitlements.active),
-        premiumEntitlement: customerInfo.entitlements.active[ENTITLEMENT_ID]
-          ? {
-              expirationDate: customerInfo.entitlements.active[ENTITLEMENT_ID]?.expirationDate,
-            }
-          : null,
+        allActiveEntitlements: Object.keys(customerInfo.entitlements.active),
+        allAvailableEntitlements: Object.keys(customerInfo.entitlements.all),
+        premiumEntitlementData: customerInfo.entitlements.active[ENTITLEMENT_ID],
+        firstActiveEntitlement: Object.entries(customerInfo.entitlements.active)[0],
+        allPurchases: {
+          activeEntitlements: customerInfo.entitlements.active,
+          allEntitlements: customerInfo.entitlements.all,
+        }
       });
 
       // Determine subscription state
@@ -267,20 +270,41 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         if (result.customerInfo) {
           const premiumEntitlement = result.customerInfo.entitlements.active[ENTITLEMENT_ID];
           
-          if (premiumEntitlement) {
-            console.log("[Subscription] 🔥 Premium entitlement confirmed in purchase response:", {
-              entitlementID: ENTITLEMENT_ID,
+          console.log("[Subscription] 🔍 PURCHASE RESPONSE ENTITLEMENTS:", {
+            entitlementIDBeingLookedFor: ENTITLEMENT_ID,
+            foundInActive: !!premiumEntitlement,
+            allActiveEntitlements: Object.keys(result.customerInfo.entitlements.active),
+            allAvailableEntitlements: Object.keys(result.customerInfo.entitlements.all),
+            firstActiveEntitlementInResponse: Object.entries(result.customerInfo.entitlements.active)[0],
+            entitlementData: premiumEntitlement ? {
               expirationDate: premiumEntitlement.expirationDate,
-            });
-          } else {
-            console.warn("[Subscription] Entitlement not yet in response, waiting for sync...");
+            } : null,
+          });
+          
+          if (!premiumEntitlement) {
+            console.warn("[Subscription] ⚠️ Entitlement not found for ID:", ENTITLEMENT_ID);
+            console.warn("[Subscription] ⚠️ Waiting for RevenueCat backend to sync...");
             // Wait a bit for RevenueCat backend to sync
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 1000));  // Increased to 1 second
           }
         }
 
         // 🔥 CRITICAL: Refresh subscription status immediately
         // This ensures isPro is set to TRUE right after purchase
+        console.log("[Subscription] 🔥 Confirming purchase with backend...");
+        
+        try {
+          // Tell backend about the purchase (needed until webhook is configured)
+          const confirmRes = await apiRequest("POST", "/api/subscription/confirm-purchase", {
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+          });
+          const confirmData = await confirmRes.json();
+          console.log("[Subscription] 🔥 Backend confirmed purchase:", confirmData);
+        } catch (err) {
+          console.warn("[Subscription] Warning: Could not confirm with backend, but purchase succeeded on client:", err);
+          // Don't fail the purchase flow - client-side purchase succeeded
+        }
+
         console.log("[Subscription] 🔥 Refreshing subscription status...");
         await refreshSubscriptionStatus();
 

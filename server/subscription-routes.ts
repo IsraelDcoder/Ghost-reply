@@ -133,6 +133,69 @@ Return ONLY valid JSON, no markdown.
   });
 
   /**
+   * POST /api/subscription/confirm-purchase
+   * Client-side workaround: After successful RevenueCat purchase, tell backend user is paid
+   * 
+   * ⚠️ WARNING: This is for testing/MVP only!
+   * In production, use RevenueCat webhooks for secure purchase verification
+   * 
+   * The proper flow is:
+   * 1. User purchases on client via RevenueCat
+   * 2. RevenueCat webhook notifies backend (automatic)
+   * 3. Backend marks user as paid
+   * 
+   * This endpoint is only needed while webhook isn't configured
+   */
+  app.post("/api/subscription/confirm-purchase", async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { expiresAt } = req.body;
+    
+    console.log(`[Subscription] ⚠️ TESTING MODE: User ${user.id} confirmed purchase via client`);
+
+    // Calculate expiration (30 days from now if not provided)
+    const subscriptionExpiresAt = expiresAt 
+      ? new Date(expiresAt)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    // Update database
+    await db
+      .insert(userSubscriptions)
+      .values({
+        userId: user.id,
+        isSubscribed: true,
+        subscriptionExpiresAt,
+        trialStartedAt: null,
+        trialExpiresAt: null,
+      })
+      .onConflictDoUpdate({
+        target: userSubscriptions.userId,
+        set: {
+          isSubscribed: true,
+          subscriptionExpiresAt,
+        },
+      });
+
+    console.log(`[Subscription] ✓ User ${user.id} marked as paid until ${subscriptionExpiresAt}`);
+
+    // Return updated status
+    const status = await getUserSubscriptionStatus(user.id);
+    return res.json({
+      success: true,
+      message: "Purchase confirmed - you now have unlimited access!",
+      status,
+    });
+  } catch (error) {
+    console.error("Confirm purchase error:", error);
+    return res.status(500).json({ error: "Failed to confirm purchase" });
+  }
+  });
+
+  /**
    * Modified /api/analyze endpoint to use new subscription service
    * Already in routes.ts but here's the updated logic
    */

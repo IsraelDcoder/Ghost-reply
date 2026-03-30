@@ -20,7 +20,7 @@ import { Platform } from "react-native";
 
 // RevenueCat Configuration
 const REVENUE_CAT_API_KEY = "goog_KjDXZHafRRKrhUdeEZzGOOrnCsI";
-export const ENTITLEMENT_ID = "GhostReply Pro"; // Must match Play Console offering
+export const ENTITLEMENT_ID = "GhostReplyPro"; // Must match RevenueCat entitlement (no space!)
 
 // Product IDs - must match Play Console exact IDs
 export const PRODUCTS = {

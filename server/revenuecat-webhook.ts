@@ -59,6 +59,8 @@ function setupRevenueCatWebhookBody(app: Express) {
     express.raw({ type: "application/json" }),
     async (req: Request, res: Response) => {
       try {
+        console.log("[RevenueCat] 🔔 WEBHOOK RECEIVED");
+        
         const signature = req.header("X-RevenueCat-Signature");
 
         if (!signature) {
@@ -67,6 +69,8 @@ function setupRevenueCatWebhookBody(app: Express) {
         }
 
         const rawBody = (req as any).body.toString("utf-8");
+
+        console.log("[RevenueCat] Webhook raw body:", rawBody);
 
         // Verify signature
         if (!verifyWebhookSignature(rawBody, signature)) {
@@ -77,13 +81,17 @@ function setupRevenueCatWebhookBody(app: Express) {
         // Parse body after validation
         const body = JSON.parse(rawBody);
 
+        console.log("[RevenueCat] Webhook parsed body:", JSON.stringify(body, null, 2));
+
         // Handle the event
+        console.log("[RevenueCat] Calling handleRevenueCatEvent...");
         await handleRevenueCatEvent(body);
 
+        console.log("[RevenueCat] ✓ Webhook processed successfully");
         // Always return 200 to acknowledge receipt
         res.json({ success: true });
       } catch (error) {
-        console.error("[RevenueCat] Error processing webhook:", error);
+        console.error("[RevenueCat] ❌ Error processing webhook:", error);
         // Still return 200 to prevent retries
         res.json({ success: true, error: "Processed with errors" });
       }
@@ -136,23 +144,27 @@ async function handleRevenueCatEvent(event: any): Promise<void> {
   }
 }
 
-/**
- * Handle initial purchase event
- * User just purchased a subscription for the first time
- */
 async function handleInitialPurchase(userId: string, event: any): Promise<void> {
   try {
     const plan = extractPlanName(event);
     const expiresAt = event.event?.expiration_at_ms;
     const purchasedAt = event.event?.purchased_at_ms;
 
-    console.log(`[RevenueCat] Initial purchase: ${userId} - ${plan}, expires: ${expiresAt}`);
+    console.log(`[RevenueCat] 🔥 INITIAL PURCHASE EVENT RECEIVED:`, {
+      userId,
+      plan,
+      expiresAt,
+      purchasedAt,
+      fullEvent: JSON.stringify(event, null, 2),
+    });
 
     // Update database with subscription info
     const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
     
+    console.log(`[RevenueCat] Attempting database insert/update for userId: ${userId}`);
+    
     // Upsert subscription record
-    await db
+    const result = await db
       .insert(userSubscriptions)
       .values({
         userId,
@@ -169,12 +181,26 @@ async function handleInitialPurchase(userId: string, event: any): Promise<void> 
         },
       });
 
-    console.log(`[RevenueCat] ✓ Subscription saved to database for user ${userId}`);
+    console.log(`[RevenueCat] ✓ Database updated successfully for user ${userId}`, {
+      isSubscribed: true,
+      subscriptionExpiresAt,
+    });
+
+    // Verify it was actually written
+    const verifyRecord = await db.query.userSubscriptions.findFirst({
+      where: eq(userSubscriptions.userId, userId),
+    });
+
+    console.log(`[RevenueCat] ✓ VERIFICATION - Record in database:`, verifyRecord);
 
     // Send congratulations notification
     await notifySubscriptionSuccess(userId, plan || "Premium");
   } catch (error) {
-    console.error("[RevenueCat] Error handling initial purchase:", error);
+    console.error("[RevenueCat] ❌ ERROR in handleInitialPurchase:", {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
   }
 }
 
