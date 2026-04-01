@@ -94,9 +94,14 @@ export async function subscriptionCheckMiddleware(req: Request, res: Response, n
     // Use the subscription service for accurate status
     const subscriptionStatus = await getUserSubscriptionStatus(user.id);
 
-    console.log("[SubscriptionCheck]", {
+    console.log("[SubscriptionCheck] 🔍 SUBSCRIPTION STATUS FROM DATABASE:", {
       userId: user.id,
-      ...subscriptionStatus,
+      isSubscribed: subscriptionStatus.isSubscribed,
+      isPaid: subscriptionStatus.isPaid,
+      isTrialActive: subscriptionStatus.isTrialActive,
+      plan: subscriptionStatus.plan,
+      subscriptionExpiresAt: subscriptionStatus.subscriptionExpiresAt,
+      trialExpiresAt: subscriptionStatus.trialExpiresAt,
     });
 
     // Attach subscription status to request

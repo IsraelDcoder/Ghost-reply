@@ -1,6 +1,6 @@
 // server/index.ts
 import "dotenv/config";
-import express from "express";
+import express2 from "express";
 
 // server/routes.ts
 import { createServer } from "node:http";
@@ -57,6 +57,23 @@ var analyticsEvents = pgTable("analytics_events", {
   eventData: jsonb("event_data").$type(),
   createdAt: timestamp("created_at").defaultNow()
 });
+var pushTokens = pgTable("push_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  // Expo push token (ExponentPushToken[...])
+  createdAt: timestamp("created_at").defaultNow(),
+  lastUsedAt: timestamp("last_used_at")
+});
+var notificationHistory = pgTable("notification_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  notificationType: varchar("notification_type").notNull(),
+  // trial_expiring, trial_expired, daily_reset, etc.
+  data: jsonb("data").$type(),
+  sentAt: timestamp("sent_at").defaultNow(),
+  readAt: timestamp("read_at")
+});
 var insertUserSchema = createInsertSchema(users).pick({
   deviceId: true
 });
@@ -83,11 +100,22 @@ var insertAnalyticsEventSchema = createInsertSchema(analyticsEvents).pick({
   eventName: true,
   eventData: true
 });
+var insertPushTokenSchema = createInsertSchema(pushTokens).pick({
+  userId: true,
+  token: true
+});
+var insertNotificationHistorySchema = createInsertSchema(notificationHistory).pick({
+  userId: true,
+  notificationType: true,
+  data: true
+});
 var dbSchema = {
   users,
   conversations,
   userSubscriptions,
-  analyticsEvents
+  analyticsEvents,
+  pushTokens,
+  notificationHistory
 };
 
 // server/routes.ts
@@ -121,31 +149,45 @@ async function registerRoutes(app2) {
       const user = req.user;
       const subscription = req.subscription;
       const { text: text2 } = req.body;
-      console.log("[/api/analyze] User:", user);
-      console.log("[/api/analyze] Subscription:", subscription);
-      console.log("[/api/analyze] Text length:", text2?.length);
+      console.log("[ANALYZE] \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
+      console.log("[ANALYZE] User ID:", user?.id);
+      console.log("[ANALYZE] Subscription Data:", {
+        isSubscribed: subscription?.isSubscribed,
+        isPaid: subscription?.isPaid,
+        isTrialActive: subscription?.isTrialActive,
+        plan: subscription?.plan
+      });
       if (!user || !user.id) {
-        console.error("[/api/analyze] User not found in request");
+        console.error("[ANALYZE] \u274C User not found");
         return res.status(401).json({ error: "User not found" });
       }
       if (!text2 || typeof text2 !== "string") {
+        console.error("[ANALYZE] \u274C Text is required");
         return res.status(400).json({ error: "Text is required" });
       }
       if (!subscription?.isSubscribed) {
-        const today = (/* @__PURE__ */ new Date()).toDateString();
+        console.log("[ANALYZE] \u{1F50D} User is NOT subscribed - checking free tier limit");
+        const now = /* @__PURE__ */ new Date();
+        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
         const todayConversations = await db.query.conversations.findMany({
           where: (fields, operators) => operators.and(
             operators.eq(fields.userId, user.id),
-            operators.gte(fields.createdAt, new Date(today))
+            operators.gte(fields.createdAt, today)
           )
         });
+        console.log("[ANALYZE] Today's conversations count:", todayConversations.length);
         if (todayConversations.length >= 2) {
+          console.log("[ANALYZE] \u274C BLOCKED - Daily free limit reached");
           return res.status(429).json({
             error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
             remaining: 0
           });
         }
+        console.log("[ANALYZE] \u2713 Free user under limit - allowing request");
+      } else {
+        console.log("[ANALYZE] \u2713 User is SUBSCRIBED - allowing unlimited access");
       }
+      console.log("[ANALYZE] Calling OpenRouter API...");
       const response = await openrouter.chat.completions.create({
         model: MODEL,
         messages: [
@@ -161,6 +203,7 @@ ${text2}`
       });
       const content = response.choices[0]?.message?.content;
       if (!content) {
+        console.error("[ANALYZE] \u274C No response from AI");
         return res.status(500).json({ error: "No response from AI" });
       }
       let parsed;
@@ -168,31 +211,34 @@ ${text2}`
         const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         parsed = JSON.parse(cleaned);
       } catch {
+        console.error("[ANALYZE] \u274C Failed to parse AI response");
         return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+      try {
+        await db.insert(conversations).values({
+          userId: user.id,
+          inputText: text2,
+          analysis: parsed.analysis || "",
+          score: parsed.score || 0,
+          scoreLabel: parsed.scoreLabel || "Neutral",
+          scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
+          replies: parsed.replies || {}
+        });
+        console.log("[ANALYZE] \u2713 Conversation saved to database");
+      } catch (dbError) {
+        console.error("[ANALYZE] \u26A0\uFE0F  DB save failed:", dbError);
       }
       const responseData = {
         ...parsed,
         conversationId: void 0
       };
-      db.insert(conversations).values({
-        userId: user.id,
-        inputText: text2,
-        analysis: parsed.analysis || "",
-        score: parsed.score || 0,
-        scoreLabel: parsed.scoreLabel || "Neutral",
-        scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
-        replies: parsed.replies || {}
-      }).returning().then((result) => {
-        if (result[0]) {
-          console.log(`[/api/analyze] Conversation saved: ${result[0].id}`);
-        }
-      }).catch((dbError) => {
-        console.error("Database save error (non-blocking):", dbError);
-      });
+      console.log("[ANALYZE] \u2713 SUCCESS - Returning response");
+      console.log("[ANALYZE] \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
       return res.json(responseData);
     } catch (error) {
-      console.error("AI analysis error:", error);
       const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("[ANALYZE] \u274C FATAL ERROR:", msg);
+      console.log("[ANALYZE] \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550");
       return res.status(500).json({ error: msg });
     }
   });
@@ -283,17 +329,214 @@ ${text2}`
 }
 
 // server/subscription-service.ts
+import { Pool as Pool3 } from "pg";
+import { drizzle as drizzle3 } from "drizzle-orm/node-postgres";
+import { eq as eq2 } from "drizzle-orm";
+
+// server/push-notifications.ts
+import axios from "axios";
 import { Pool as Pool2 } from "pg";
 import { drizzle as drizzle2 } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
+var EXPO_NOTIFICATIONS_API_URL = "https://exp.host/--/api/v2/push/send";
 var pool2 = new Pool2({
   connectionString: process.env.DATABASE_URL
 });
 var db2 = drizzle2(pool2, { schema: dbSchema });
+async function sendPushNotification(token, title, body, data, options) {
+  try {
+    const payload = {
+      to: token,
+      title,
+      body,
+      data,
+      badge: options?.badge || 1,
+      sound: options?.sound ?? "default",
+      ttl: options?.ttl || 3600
+      // Default 1 hour
+    };
+    const response = await axios.post(EXPO_NOTIFICATIONS_API_URL, payload);
+    if (response.data?.data?.id) {
+      return true;
+    }
+    console.error("Push notification failed:", response.data);
+    return false;
+  } catch (error) {
+    console.error("Error sending push notification:", error);
+    return false;
+  }
+}
+async function getUserPushToken(userId) {
+  try {
+    const token = await db2.query.pushTokens.findFirst({
+      where: eq(pushTokens.userId, userId)
+    });
+    return token?.token || null;
+  } catch (error) {
+    console.error("Error getting push token:", error);
+    return null;
+  }
+}
+async function sendTrialExpiringWarning(userId, daysRemaining) {
+  const token = await getUserPushToken(userId);
+  if (!token) return false;
+  const title = "Your Trial Expires Soon";
+  const body = daysRemaining === 1 ? "Your AI reply trial expires tomorrow. Subscribe to keep using GhostReply." : `Your AI reply trial expires in ${daysRemaining} days.`;
+  const success = await sendPushNotification(token, title, body, {
+    action: "trial_expiring",
+    daysRemaining: String(daysRemaining)
+  });
+  if (success) {
+    try {
+      await db2.insert(notificationHistory).values({
+        userId,
+        notificationType: "trial_expiring",
+        data: { daysRemaining }
+      });
+    } catch (error) {
+      console.error("Error logging notification history:", error);
+    }
+  }
+  return success;
+}
+async function sendTrialExpiredUpsell(userId) {
+  const token = await getUserPushToken(userId);
+  if (!token) return false;
+  const title = "Your Trial Has Ended";
+  const body = "Subscribe now to get unlimited AI-powered replies and keep the conversation flowing.";
+  const success = await sendPushNotification(token, title, body, {
+    action: "trial_expired_upsell"
+  });
+  if (success) {
+    try {
+      await db2.insert(notificationHistory).values({
+        userId,
+        notificationType: "trial_expired",
+        data: {}
+      });
+    } catch (error) {
+      console.error("Error logging notification history:", error);
+    }
+  }
+  return success;
+}
+async function sendDailyLimitReset(userId) {
+  const token = await getUserPushToken(userId);
+  if (!token) return false;
+  const title = "Your Daily Replies Are Ready";
+  const body = "You have 2 new replies to use today. Get unlimited with a subscription.";
+  const success = await sendPushNotification(token, title, body, {
+    action: "daily_limit_reset"
+  });
+  if (success) {
+    try {
+      await db2.insert(notificationHistory).values({
+        userId,
+        notificationType: "daily_limit_reset",
+        data: {}
+      });
+    } catch (error) {
+      console.error("Error logging notification history:", error);
+    }
+  }
+  return success;
+}
+async function sendSubscriptionUpgradeSuccess(userId, planName) {
+  const token = await getUserPushToken(userId);
+  if (!token) return false;
+  const title = "Welcome to " + planName;
+  const body = "You're all set with unlimited AI-powered replies.";
+  const success = await sendPushNotification(token, title, body, {
+    action: "subscription_success",
+    plan: planName
+  });
+  if (success) {
+    try {
+      await db2.insert(notificationHistory).values({
+        userId,
+        notificationType: "subscription_success",
+        data: { plan: planName }
+      });
+    } catch (error) {
+      console.error("Error logging notification history:", error);
+    }
+  }
+  return success;
+}
+function registerPushNotificationRoutes(app2) {
+  app2.post("/api/notifications/token", async (req, res) => {
+    try {
+      const user = req.user;
+      const { token } = req.body;
+      if (!user || !token) {
+        return res.status(400).json({ error: "Missing user or token" });
+      }
+      if (!token.startsWith("ExponentPushToken[")) {
+        return res.status(400).json({ error: "Invalid Expo push token format" });
+      }
+      try {
+        const existingToken = await db2.query.pushTokens.findFirst({
+          where: eq(pushTokens.token, token)
+        });
+        if (existingToken) {
+          await db2.update(pushTokens).set({ lastUsedAt: /* @__PURE__ */ new Date() }).where(eq(pushTokens.token, token));
+        } else {
+          await db2.insert(pushTokens).values({
+            userId: user.id,
+            token
+          });
+        }
+        res.json({
+          success: true,
+          message: "Push token registered"
+        });
+      } catch (dbError) {
+        if (dbError.code === "23505") {
+          console.warn(`Token already registered for different user`);
+        }
+        res.json({
+          success: true,
+          message: "Push token registered"
+        });
+      }
+    } catch (error) {
+      console.error("Error registering push token:", error);
+      res.status(500).json({ error: "Failed to register push token" });
+    }
+  });
+  app2.post("/api/notifications/test", async (req, res) => {
+    try {
+      const user = req.user;
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: "Missing token" });
+      }
+      const success = await sendPushNotification(
+        token,
+        "GhostReply Test",
+        "This is a test notification from GhostReply."
+      );
+      if (success) {
+        res.json({ success: true, message: "Test notification sent" });
+      } else {
+        res.status(500).json({ error: "Failed to send test notification" });
+      }
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).json({ error: "Failed to send test notification" });
+    }
+  });
+}
+
+// server/subscription-service.ts
+var pool3 = new Pool3({
+  connectionString: process.env.DATABASE_URL
+});
+var db3 = drizzle3(pool3, { schema: dbSchema });
 async function getUserSubscriptionStatus(userId) {
   try {
-    const subscription = await db2.query.userSubscriptions.findFirst({
-      where: eq(userSubscriptions.userId, userId)
+    const subscription = await db3.query.userSubscriptions.findFirst({
+      where: eq2(userSubscriptions.userId, userId)
     });
     const now = /* @__PURE__ */ new Date();
     if (!subscription) {
@@ -350,22 +593,20 @@ async function startFreeTrial(userId) {
   try {
     const now = /* @__PURE__ */ new Date();
     const trialExpiresAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1e3);
-    const existingSubscription = await db2.query.userSubscriptions.findFirst({
-      where: eq(userSubscriptions.userId, userId)
+    const existingSubscription = await db3.query.userSubscriptions.findFirst({
+      where: eq2(userSubscriptions.userId, userId)
     });
     if (existingSubscription) {
       if (!existingSubscription.trialStartedAt) {
-        await db2.update(userSubscriptions).set({
+        await db3.update(userSubscriptions).set({
           trialStartedAt: now,
           trialExpiresAt,
           updatedAt: now
-        }).where(eq(userSubscriptions.userId, userId));
-        console.log(`[Trial] Started new trial for user ${userId}, expires at ${trialExpiresAt}`);
+        }).where(eq2(userSubscriptions.userId, userId));
       } else {
-        console.log(`[Trial] User ${userId} already has a trial record`);
       }
     } else {
-      await db2.insert(userSubscriptions).values({
+      await db3.insert(userSubscriptions).values({
         userId,
         isSubscribed: false,
         // Trial is not a paid subscription
@@ -374,12 +615,42 @@ async function startFreeTrial(userId) {
         createdAt: now,
         updatedAt: now
       });
-      console.log(`[Trial] Created new trial for user ${userId}, expires at ${trialExpiresAt}`);
     }
     return getUserSubscriptionStatus(userId);
   } catch (error) {
-    console.error("Error starting free trial:", error);
     throw new Error("Failed to start free trial");
+  }
+}
+async function handleTrialExpiration(userId) {
+  try {
+    const subscription = await db3.query.userSubscriptions.findFirst({
+      where: eq2(userSubscriptions.userId, userId)
+    });
+    if (!subscription) return;
+    const now = /* @__PURE__ */ new Date();
+    const isTrialExpired = subscription.trialExpiresAt && subscription.trialExpiresAt < now && !subscription.isSubscribed;
+    if (isTrialExpired) {
+      console.log(`[Trial] Trial expired for user ${userId}. Ready for conversion to paid plan.`);
+      try {
+        await sendTrialExpiredUpsell(userId);
+      } catch (notificationError) {
+        console.error("Error sending trial expiration notification:", notificationError);
+      }
+    } else if (subscription.trialExpiresAt && subscription.trialExpiresAt > now && !subscription.isSubscribed) {
+      const daysRemaining = Math.ceil(
+        (subscription.trialExpiresAt.getTime() - now.getTime()) / (1e3 * 60 * 60 * 24)
+      );
+      if (daysRemaining === 1 || daysRemaining === 3) {
+        console.log(`[Trial] Sending expiration warning for user ${userId}: ${daysRemaining} days left`);
+        try {
+          await sendTrialExpiringWarning(userId, daysRemaining);
+        } catch (notificationError) {
+          console.error("Error sending trial warning notification:", notificationError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error handling trial expiration:", error);
   }
 }
 async function shouldEnforceDailyLimits(userId) {
@@ -390,9 +661,37 @@ async function getDailyLimitForUser(userId) {
   const shouldEnforce = await shouldEnforceDailyLimits(userId);
   return shouldEnforce ? 2 : Infinity;
 }
+async function notifyDailyLimitReset(userId) {
+  try {
+    const shouldEnforce = await shouldEnforceDailyLimits(userId);
+    if (!shouldEnforce) {
+      return;
+    }
+    console.log(`[Notifications] Sending daily limit reset notification to user ${userId}`);
+    try {
+      await sendDailyLimitReset(userId);
+    } catch (notificationError) {
+      console.error("Error sending daily limit reset notification:", notificationError);
+    }
+  } catch (error) {
+    console.error("Error notifying daily limit reset:", error);
+  }
+}
+async function notifySubscriptionSuccess(userId, planName = "Premium") {
+  try {
+    console.log(`[Notifications] Sending subscription success notification to user ${userId}`);
+    try {
+      await sendSubscriptionUpgradeSuccess(userId, planName);
+    } catch (notificationError) {
+      console.error("Error sending subscription success notification:", notificationError);
+    }
+  } catch (error) {
+    console.error("Error notifying subscription success:", error);
+  }
+}
 
 // server/subscription-routes.ts
-import { eq as eq2, gte, and } from "drizzle-orm";
+import { eq as eq3, gte as gte2, and as and2 } from "drizzle-orm";
 import OpenAI2 from "openai";
 async function registerSubscriptionRoutes(app2) {
   const openrouter2 = new OpenAI2({
@@ -422,7 +721,6 @@ Return ONLY valid JSON, no markdown.
         return res.status(401).json({ error: "Unauthorized" });
       }
       const status = await getUserSubscriptionStatus(user.id);
-      console.log(`[/api/subscription/status] User ${user.id}:`, status);
       return res.json(status);
     } catch (error) {
       console.error("Subscription status error:", error);
@@ -443,7 +741,6 @@ Return ONLY valid JSON, no markdown.
         });
       }
       const newStatus = await startFreeTrial(user.id);
-      console.log(`[/api/subscription/start-trial] Started trial for user ${user.id}`);
       return res.json({
         success: true,
         message: "Free trial started successfully",
@@ -462,11 +759,12 @@ Return ONLY valid JSON, no markdown.
       }
       const dailyLimit = await getDailyLimitForUser(user.id);
       const status = await getUserSubscriptionStatus(user.id);
-      const today = (/* @__PURE__ */ new Date()).toDateString();
-      const todayConversations = await db2.query.conversations.findMany({
-        where: and(
-          eq2(conversations.userId, user.id),
-          gte(conversations.createdAt, new Date(today))
+      const now = /* @__PURE__ */ new Date();
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+      const todayConversations = await db3.query.conversations.findMany({
+        where: and2(
+          eq3(conversations.userId, user.id),
+          gte2(conversations.createdAt, today)
         )
       });
       return res.json({
@@ -481,13 +779,58 @@ Return ONLY valid JSON, no markdown.
       return res.status(500).json({ error: "Failed to get daily limit" });
     }
   });
+  app2.post("/api/subscription/confirm-purchase", async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const { expiresAt } = req.body;
+      console.log(`[Subscription] \u{1F525} MANUAL PURCHASE CONFIRMATION: User ${user.id} confirmed purchase via client`);
+      const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3);
+      console.log(`[Subscription] Marking user ${user.id} as paid until ${subscriptionExpiresAt}`);
+      const updateResult = await db3.update(userSubscriptions).set({
+        isSubscribed: true,
+        subscriptionExpiresAt
+      }).where(eq3(userSubscriptions.userId, user.id));
+      if (updateResult === void 0 || updateResult.rowCount === 0) {
+        console.log(`[Subscription] User has no subscription record, creating new one`);
+        await db3.insert(userSubscriptions).values({
+          userId: user.id,
+          isSubscribed: true,
+          subscriptionExpiresAt,
+          trialStartedAt: null,
+          trialExpiresAt: null
+        });
+      }
+      console.log(`[Subscription] \u2713 User ${user.id} marked as paid successfully`);
+      const verifyRecord = await db3.query.userSubscriptions.findFirst({
+        where: eq3(userSubscriptions.userId, user.id)
+      });
+      console.log(`[Subscription] \u2713 VERIFICATION - Record in database:`, {
+        userId: verifyRecord?.userId,
+        isSubscribed: verifyRecord?.isSubscribed,
+        subscriptionExpiresAt: verifyRecord?.subscriptionExpiresAt
+      });
+      const status = await getUserSubscriptionStatus(user.id);
+      return res.json({
+        success: true,
+        message: "\u2713 Purchase confirmed - you now have unlimited access!",
+        status
+      });
+    } catch (error) {
+      console.error("[Subscription] \u274C Confirm purchase error:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      return res.status(500).json({ error: "Failed to confirm purchase" });
+    }
+  });
   app2.post("/api/analyze", async (req, res) => {
     try {
       const user = req.user;
       const { text: text2 } = req.body;
-      console.log("[/api/analyze] User:", user?.id);
       if (!user || !user.id) {
-        console.error("[/api/analyze] User not found in request");
         return res.status(401).json({ error: "User not found" });
       }
       if (!text2 || typeof text2 !== "string") {
@@ -496,10 +839,10 @@ Return ONLY valid JSON, no markdown.
       const shouldEnforce = await shouldEnforceDailyLimits(user.id);
       if (shouldEnforce) {
         const today = (/* @__PURE__ */ new Date()).toDateString();
-        const todayConversations = await db2.query.conversations.findMany({
-          where: and(
-            eq2(conversations.userId, user.id),
-            gte(conversations.createdAt, new Date(today))
+        const todayConversations = await db3.query.conversations.findMany({
+          where: and2(
+            eq3(conversations.userId, user.id),
+            gte2(conversations.createdAt, new Date(today))
           )
         });
         if (todayConversations.length >= 2) {
@@ -539,7 +882,7 @@ ${text2}`
           ...parsed,
           conversationId: void 0
         };
-        db2.insert(conversations).values({
+        db3.insert(conversations).values({
           userId: user.id,
           inputText: text2,
           analysis: parsed.analysis || "",
@@ -567,24 +910,322 @@ ${text2}`
   });
 }
 
-// server/middleware.ts
+// server/revenuecat-webhook.ts
+import crypto from "crypto";
+import express from "express";
 import { Pool as Pool4 } from "pg";
 import { drizzle as drizzle4 } from "drizzle-orm/node-postgres";
+import { eq as eq4 } from "drizzle-orm";
+var pool4 = new Pool4({
+  connectionString: process.env.DATABASE_URL
+});
+var db4 = drizzle4(pool4, { schema: dbSchema });
+var REVENUECAT_WEBHOOK_KEY = process.env.REVENUECAT_WEBHOOK_KEY || "";
+function verifyWebhookSignature(body, signature) {
+  if (!REVENUECAT_WEBHOOK_KEY) {
+    console.warn("[RevenueCat] Warning: REVENUECAT_WEBHOOK_KEY not set - signatures not verified");
+    return true;
+  }
+  const expectedSignature = crypto.createHmac("sha256", REVENUECAT_WEBHOOK_KEY).update(body).digest("hex");
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+function setupRevenueCatWebhookBody(app2) {
+  app2.post(
+    "/api/webhooks/revenuecat",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      try {
+        console.log("[RevenueCat] \u{1F514} WEBHOOK RECEIVED");
+        const signature = req.header("X-RevenueCat-Signature");
+        let rawBody;
+        if (Buffer.isBuffer(req.body)) {
+          rawBody = req.body.toString("utf-8");
+        } else if (typeof req.body === "string") {
+          rawBody = req.body;
+        } else {
+          console.error("[RevenueCat] \u274C Body is neither Buffer nor string:", typeof req.body);
+          console.error("[RevenueCat] Body value:", req.body);
+          return res.status(400).json({ error: "Invalid body format" });
+        }
+        console.log("[RevenueCat] Webhook raw body (first 200 chars):", rawBody.substring(0, 200));
+        if (REVENUECAT_WEBHOOK_KEY && signature) {
+          console.log("[RevenueCat] Verifying webhook signature...");
+          if (!verifyWebhookSignature(rawBody, signature)) {
+            console.warn("[RevenueCat] Invalid signature");
+            return res.status(401).json({ error: "Invalid signature" });
+          }
+        } else if (!REVENUECAT_WEBHOOK_KEY) {
+          console.warn("[RevenueCat] \u26A0\uFE0F  REVENUECAT_WEBHOOK_KEY not set - accepting webhook without signature verification");
+        } else {
+          console.warn("[RevenueCat] Missing signature header - accepting webhook anyway since key not configured");
+        }
+        let body;
+        try {
+          body = JSON.parse(rawBody);
+        } catch (parseErr) {
+          console.error("[RevenueCat] \u274C Failed to parse webhook JSON:", parseErr);
+          console.error("[RevenueCat] Raw body was:", rawBody);
+          return res.status(400).json({ error: "Invalid JSON in webhook body" });
+        }
+        console.log("[RevenueCat] \u2713 Webhook parsed successfully, event type:", body.event?.type);
+        console.log("[RevenueCat] Calling handleRevenueCatEvent...");
+        await handleRevenueCatEvent(body);
+        console.log("[RevenueCat] \u2713 Webhook processed successfully");
+        res.json({ success: true });
+      } catch (error) {
+        console.error("[RevenueCat] \u274C Error processing webhook:", error);
+        res.json({ success: true, error: "Processed with errors" });
+      }
+    }
+  );
+}
+async function handleRevenueCatEvent(event) {
+  try {
+    const eventType = event.event?.type;
+    const appUserId = event.event?.app_user_id;
+    if (!eventType || !appUserId) {
+      console.warn("[RevenueCat] Missing event type or app_user_id:", event);
+      return;
+    }
+    console.log(`[RevenueCat] Processing ${eventType} event for user ${appUserId}`);
+    switch (eventType) {
+      case "initial_purchase":
+        await handleInitialPurchase(appUserId, event);
+        break;
+      case "renewal":
+        await handleRenewal(appUserId, event);
+        break;
+      case "transfer":
+        await handleSubscriptionTransfer(appUserId, event);
+        break;
+      case "cancellation":
+        await handleCancellation(appUserId, event);
+        break;
+      case "subscription_started":
+        await handleSubscriptionStarted(appUserId, event);
+        break;
+      default:
+        console.log(`[RevenueCat] Unhandled event type: ${eventType}`);
+    }
+  } catch (error) {
+    console.error("[RevenueCat] Error handling event:", error);
+    throw error;
+  }
+}
+async function handleInitialPurchase(userId, event) {
+  try {
+    const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
+    const purchasedAt = event.event?.purchased_at_ms;
+    console.log(`[RevenueCat] \u{1F525} INITIAL PURCHASE EVENT RECEIVED:`, {
+      userId,
+      plan,
+      expiresAt,
+      purchasedAt,
+      fullEvent: JSON.stringify(event, null, 2)
+    });
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    console.log(`[RevenueCat] Attempting database insert/update for userId: ${userId}`);
+    const result = await db4.insert(userSubscriptions).values({
+      userId,
+      isSubscribed: true,
+      subscriptionExpiresAt,
+      trialStartedAt: null,
+      trialExpiresAt: null
+    }).onConflictDoUpdate({
+      target: userSubscriptions.userId,
+      set: {
+        isSubscribed: true,
+        subscriptionExpiresAt
+      }
+    });
+    console.log(`[RevenueCat] \u2713 Database updated successfully for user ${userId}`, {
+      isSubscribed: true,
+      subscriptionExpiresAt
+    });
+    const verifyRecord = await db4.query.userSubscriptions.findFirst({
+      where: eq4(userSubscriptions.userId, userId)
+    });
+    console.log(`[RevenueCat] \u2713 VERIFICATION - Record in database:`, verifyRecord);
+    await notifySubscriptionSuccess(userId, plan || "Premium");
+  } catch (error) {
+    console.error("[RevenueCat] \u274C ERROR in handleInitialPurchase:", {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : void 0
+    });
+  }
+}
+async function handleRenewal(userId, event) {
+  try {
+    const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
+    console.log(`[RevenueCat] Renewal: ${userId} - ${plan}, expires: ${expiresAt}`);
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    await db4.update(userSubscriptions).set({
+      subscriptionExpiresAt
+    }).where(eq4(userSubscriptions.userId, userId));
+    console.log(`[RevenueCat] \u2713 Subscription renewed and updated for user ${userId}`);
+  } catch (error) {
+    console.error("[RevenueCat] Error handling renewal:", error);
+  }
+}
+async function handleSubscriptionTransfer(userId, event) {
+  try {
+    console.log(`[RevenueCat] Subscription transfer: ${userId}`);
+    const plan = extractPlanName(event);
+    await notifySubscriptionSuccess(userId, plan || "Premium");
+  } catch (error) {
+    console.error("[RevenueCat] Error handling transfer:", error);
+  }
+}
+async function handleSubscriptionStarted(userId, event) {
+  try {
+    const plan = extractPlanName(event);
+    const expiresAt = event.event?.expiration_at_ms;
+    console.log(`[RevenueCat] Subscription started: ${userId} - ${plan}, expires: ${expiresAt}`);
+    const subscriptionExpiresAt = expiresAt ? new Date(expiresAt) : null;
+    await db4.insert(userSubscriptions).values({
+      userId,
+      isSubscribed: true,
+      subscriptionExpiresAt,
+      trialStartedAt: null,
+      trialExpiresAt: null
+    }).onConflictDoUpdate({
+      target: userSubscriptions.userId,
+      set: {
+        isSubscribed: true,
+        subscriptionExpiresAt
+      }
+    });
+    console.log(`[RevenueCat] \u2713 Subscription started and saved for user ${userId}`);
+    await notifySubscriptionSuccess(userId, plan || "Premium");
+  } catch (error) {
+    console.error("[RevenueCat] Error handling subscription started:", error);
+  }
+}
+async function handleCancellation(userId, event) {
+  try {
+    const reason = event.event?.cancellation_reason;
+    console.log(`[RevenueCat] Cancellation: ${userId} - Reason: ${reason}`);
+    await db4.update(userSubscriptions).set({
+      isSubscribed: false,
+      subscriptionExpiresAt: null
+    }).where(eq4(userSubscriptions.userId, userId));
+    console.log(`[RevenueCat] \u2713 Subscription cancelled for user ${userId}`);
+  } catch (error) {
+    console.error("[RevenueCat] Error handling cancellation:", error);
+  }
+}
+function extractPlanName(event) {
+  const productId = event.event?.product_id;
+  if (!productId) {
+    return "Premium";
+  }
+  const planMap = {
+    "ghostreply_weekly": "Premium Weekly",
+    "ghostreply_monthly": "Premium Monthly",
+    "ghostreply_yearly": "Premium Yearly"
+  };
+  return planMap[productId] || "Premium";
+}
+function registerRevenueCatWebhook(app2) {
+  setupRevenueCatWebhookBody(app2);
+  console.log("[RevenueCat] Webhook endpoint registered at POST /api/webhooks/revenuecat");
+}
+
+// server/cron-scheduler.ts
+import cron from "node-cron";
+import { Pool as Pool5 } from "pg";
+import { drizzle as drizzle5 } from "drizzle-orm/node-postgres";
+var pool5 = new Pool5({
+  connectionString: process.env.DATABASE_URL
+});
+var db5 = drizzle5(pool5, { schema: dbSchema });
+async function getAllUsers() {
+  try {
+    const allUsers = await db5.select({ id: users.id }).from(users);
+    return allUsers.map((u) => u.id);
+  } catch (error) {
+    console.error("Error fetching users for cron job:", error);
+    return [];
+  }
+}
+function initializeCronJobs() {
+  console.log("[Cron] Initializing scheduled jobs...");
+  const trialExpirationJob = cron.schedule("0 9 * * *", async () => {
+    console.log("[Cron] Starting trial expiration check...");
+    try {
+      const userIds = await getAllUsers();
+      console.log(`[Cron] Checking ${userIds.length} users for trial expiration...`);
+      let checked = 0;
+      let withTrials = 0;
+      for (const userId of userIds) {
+        try {
+          await handleTrialExpiration(userId);
+          checked++;
+        } catch (error) {
+          console.error(`[Cron] Error checking trial for user ${userId}:`, error);
+        }
+      }
+      console.log(`[Cron] Trial expiration check completed. Checked: ${checked} users`);
+    } catch (error) {
+      console.error("[Cron] Error in trial expiration job:", error);
+    }
+  });
+  const dailyLimitResetJob = cron.schedule("0 0 * * *", async () => {
+    console.log("[Cron] Starting daily limit reset notifications...");
+    try {
+      const userIds = await getAllUsers();
+      console.log(`[Cron] Sending daily reset notifications to ${userIds.length} users...`);
+      let sent = 0;
+      for (const userId of userIds) {
+        try {
+          await notifyDailyLimitReset(userId);
+          sent++;
+        } catch (error) {
+          console.error(
+            `[Cron] Error sending daily reset notification to user ${userId}:`,
+            error
+          );
+        }
+      }
+      console.log(`[Cron] Daily limit reset completed. Sent: ${sent} notifications`);
+    } catch (error) {
+      console.error("[Cron] Error in daily limit reset job:", error);
+    }
+  });
+  console.log("[Cron] \u2713 Trial expiration check scheduled for 9:00 AM daily");
+  console.log("[Cron] \u2713 Daily limit reset scheduled for 12:00 AM (midnight) daily");
+  console.log("[Cron] Jobs initialized successfully");
+}
+function stopCronJobs() {
+  console.log("[Cron] Stopping all scheduled jobs...");
+  cron.getTasks().forEach((task) => task.stop());
+  console.log("[Cron] All jobs stopped");
+}
+
+// server/middleware.ts
+import { Pool as Pool7 } from "pg";
+import { drizzle as drizzle7 } from "drizzle-orm/node-postgres";
 
 // server/auth.ts
 import { v4 as uuidv4 } from "uuid";
-import { Pool as Pool3 } from "pg";
-import { eq as eq3 } from "drizzle-orm";
-import { drizzle as drizzle3 } from "drizzle-orm/node-postgres";
-var db3 = null;
+import { Pool as Pool6 } from "pg";
+import { eq as eq5 } from "drizzle-orm";
+import { drizzle as drizzle6 } from "drizzle-orm/node-postgres";
+var db6 = null;
 function getDb() {
-  if (!db3) {
-    const pool4 = new Pool3({
+  if (!db6) {
+    const pool7 = new Pool6({
       connectionString: process.env.DATABASE_URL
     });
-    db3 = drizzle3(pool4, { schema: dbSchema });
+    db6 = drizzle6(pool7, { schema: dbSchema });
   }
-  return db3;
+  return db6;
 }
 async function getOrCreateDevice(deviceId) {
   if (!deviceId) {
@@ -593,10 +1234,10 @@ async function getOrCreateDevice(deviceId) {
   const database = getDb();
   try {
     const existingUser = await database.query.users.findFirst({
-      where: eq3(users.deviceId, deviceId)
+      where: eq5(users.deviceId, deviceId)
     });
     if (existingUser) {
-      await database.update(users).set({ lastActiveAt: /* @__PURE__ */ new Date() }).where(eq3(users.id, existingUser.id));
+      await database.update(users).set({ lastActiveAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, existingUser.id));
       return existingUser;
     }
     const result = await database.insert(users).values({
@@ -622,10 +1263,10 @@ function generateDeviceId() {
 }
 
 // server/middleware.ts
-var pool3 = new Pool4({
+var pool6 = new Pool7({
   connectionString: process.env.DATABASE_URL
 });
-var db4 = drizzle4(pool3, { schema: dbSchema });
+var db7 = drizzle7(pool6, { schema: dbSchema });
 var rateLimitStore = /* @__PURE__ */ new Map();
 var RATE_LIMITS = {
   "/api/analyze": { requests: 20, windowMs: 6e4 },
@@ -653,23 +1294,16 @@ function rateLimitMiddleware(req, res, next) {
 }
 async function deviceAuthMiddleware(req, res, next) {
   try {
-    console.log("[DeviceAuth] Path:", req.path);
-    console.log("[DeviceAuth] Headers:", req.headers);
     let deviceId = extractDeviceId(req);
-    console.log("[DeviceAuth] Extracted device ID:", deviceId);
     if (!deviceId) {
-      console.log("[DeviceAuth] No device ID, generating new one");
       deviceId = generateDeviceId();
       res.set("X-Device-Id", deviceId);
     }
-    console.log("[DeviceAuth] Getting or creating user for device:", deviceId);
     const user = await getOrCreateDevice(deviceId);
-    console.log("[DeviceAuth] User retrieved/created:", user);
     req.user = user;
     req.deviceId = deviceId;
     next();
   } catch (error) {
-    console.error("Device auth error:", error);
     return res.status(500).json({ error: "Authentication error: " + (error instanceof Error ? error.message : String(error)) });
   }
 }
@@ -686,9 +1320,14 @@ async function subscriptionCheckMiddleware(req, res, next) {
       return next();
     }
     const subscriptionStatus = await getUserSubscriptionStatus(user.id);
-    console.log("[SubscriptionCheck]", {
+    console.log("[SubscriptionCheck] \u{1F50D} SUBSCRIPTION STATUS FROM DATABASE:", {
       userId: user.id,
-      ...subscriptionStatus
+      isSubscribed: subscriptionStatus.isSubscribed,
+      isPaid: subscriptionStatus.isPaid,
+      isTrialActive: subscriptionStatus.isTrialActive,
+      plan: subscriptionStatus.plan,
+      subscriptionExpiresAt: subscriptionStatus.subscriptionExpiresAt,
+      trialExpiresAt: subscriptionStatus.trialExpiresAt
     });
     req.subscription = subscriptionStatus;
     next();
@@ -707,7 +1346,7 @@ async function subscriptionCheckMiddleware(req, res, next) {
 // server/index.ts
 import * as fs2 from "fs";
 import * as path2 from "path";
-var app = express();
+var app = express2();
 var log = console.log;
 function setupCors(app2) {
   app2.use((req, res, next) => {
@@ -736,13 +1375,13 @@ function setupCors(app2) {
 }
 function setupBodyParsing(app2) {
   app2.use(
-    express.json({
+    express2.json({
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
     })
   );
-  app2.use(express.urlencoded({ extended: false }));
+  app2.use(express2.urlencoded({ extended: false }));
 }
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
@@ -844,8 +1483,8 @@ function configureExpoAndLanding(app2) {
     }
     next();
   });
-  app2.use("/assets", express.static(path2.resolve(process.cwd(), "assets")));
-  app2.use(express.static(path2.resolve(process.cwd(), "static-build")));
+  app2.use("/assets", express2.static(path2.resolve(process.cwd(), "assets")));
+  app2.use(express2.static(path2.resolve(process.cwd(), "static-build")));
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 function setupErrorHandler(app2) {
@@ -882,11 +1521,36 @@ function setupErrorHandler(app2) {
   log("Registering subscription routes...");
   await registerSubscriptionRoutes(app);
   log("Subscription routes registered");
+  log("Registering push notification routes...");
+  registerPushNotificationRoutes(app);
+  log("Push notification routes registered");
+  log("Registering RevenueCat webhook...");
+  registerRevenueCatWebhook(app);
+  log("RevenueCat webhook registered");
+  log("Initializing cron jobs...");
+  initializeCronJobs();
+  log("Cron jobs initialized");
   setupErrorHandler(app);
   log("Error handler setup complete");
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(port, () => {
     const address = server.address();
     log(`express server serving on port ${port}`);
+  });
+  process.on("SIGTERM", () => {
+    log("SIGTERM received, shutting down gracefully...");
+    stopCronJobs();
+    server.close(() => {
+      log("Server closed");
+      process.exit(0);
+    });
+  });
+  process.on("SIGINT", () => {
+    log("SIGINT received, shutting down gracefully...");
+    stopCronJobs();
+    server.close(() => {
+      log("Server closed");
+      process.exit(0);
+    });
   });
 })();

@@ -155,42 +155,63 @@ Return ONLY valid JSON, no markdown.
 
     const { expiresAt } = req.body;
     
-    console.log(`[Subscription] ⚠️ TESTING MODE: User ${user.id} confirmed purchase via client`);
+    console.log(`[Subscription] 🔥 MANUAL PURCHASE CONFIRMATION: User ${user.id} confirmed purchase via client`);
 
-    // Calculate expiration (30 days from now if not provided)
+    // Calculate expiration (365 days from now if not provided)
     const subscriptionExpiresAt = expiresAt 
       ? new Date(expiresAt)
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
-    // Update database
-    await db
-      .insert(userSubscriptions)
-      .values({
-        userId: user.id,
+    console.log(`[Subscription] Marking user ${user.id} as paid until ${subscriptionExpiresAt}`);
+
+    // FIX: Use update first, then insert if needed
+    const updateResult = await db
+      .update(userSubscriptions)
+      .set({
         isSubscribed: true,
         subscriptionExpiresAt,
-        trialStartedAt: null,
-        trialExpiresAt: null,
       })
-      .onConflictDoUpdate({
-        target: userSubscriptions.userId,
-        set: {
+      .where(eq(userSubscriptions.userId, user.id));
+
+    // If no rows were updated, insert a new subscription record
+    if (updateResult === undefined || updateResult.rowCount === 0) {
+      console.log(`[Subscription] User has no subscription record, creating new one`);
+      await db
+        .insert(userSubscriptions)
+        .values({
+          userId: user.id,
           isSubscribed: true,
           subscriptionExpiresAt,
-        },
-      });
+          trialStartedAt: null,
+          trialExpiresAt: null,
+        });
+    }
 
-    console.log(`[Subscription] ✓ User ${user.id} marked as paid until ${subscriptionExpiresAt}`);
+    console.log(`[Subscription] ✓ User ${user.id} marked as paid successfully`);
+
+    // Verify it was actually written
+    const verifyRecord = await db.query.userSubscriptions.findFirst({
+      where: eq(userSubscriptions.userId, user.id),
+    });
+
+    console.log(`[Subscription] ✓ VERIFICATION - Record in database:`, {
+      userId: verifyRecord?.userId,
+      isSubscribed: verifyRecord?.isSubscribed,
+      subscriptionExpiresAt: verifyRecord?.subscriptionExpiresAt,
+    });
 
     // Return updated status
     const status = await getUserSubscriptionStatus(user.id);
     return res.json({
       success: true,
-      message: "Purchase confirmed - you now have unlimited access!",
+      message: "✓ Purchase confirmed - you now have unlimited access!",
       status,
     });
   } catch (error) {
-    console.error("Confirm purchase error:", error);
+    console.error("[Subscription] ❌ Confirm purchase error:", {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
     return res.status(500).json({ error: "Failed to confirm purchase" });
   }
   });

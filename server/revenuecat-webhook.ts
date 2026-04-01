@@ -62,7 +62,20 @@ function setupRevenueCatWebhookBody(app: Express) {
         console.log("[RevenueCat] 🔔 WEBHOOK RECEIVED");
         
         const signature = req.header("X-RevenueCat-Signature");
-        const rawBody = (req as any).body.toString("utf-8");
+        
+        // FIX: Handle body that might be a Buffer or already converted
+        let rawBody: string;
+        if (Buffer.isBuffer((req as any).body)) {
+          rawBody = ((req as any).body as Buffer).toString("utf-8");
+        } else if (typeof (req as any).body === "string") {
+          rawBody = (req as any).body;
+        } else {
+          console.error("[RevenueCat] ❌ Body is neither Buffer nor string:", typeof (req as any).body);
+          console.error("[RevenueCat] Body value:", (req as any).body);
+          return res.status(400).json({ error: "Invalid body format" });
+        }
+
+        console.log("[RevenueCat] Webhook raw body (first 200 chars):", rawBody.substring(0, 200));
 
         // Verify signature only if webhook key is configured
         if (REVENUECAT_WEBHOOK_KEY && signature) {
@@ -77,12 +90,17 @@ function setupRevenueCatWebhookBody(app: Express) {
           console.warn("[RevenueCat] Missing signature header - accepting webhook anyway since key not configured");
         }
 
-        console.log("[RevenueCat] Webhook raw body:", rawBody);
-
         // Parse body after validation
-        const body = JSON.parse(rawBody);
+        let body;
+        try {
+          body = JSON.parse(rawBody);
+        } catch (parseErr) {
+          console.error("[RevenueCat] ❌ Failed to parse webhook JSON:", parseErr);
+          console.error("[RevenueCat] Raw body was:", rawBody);
+          return res.status(400).json({ error: "Invalid JSON in webhook body" });
+        }
 
-        console.log("[RevenueCat] Webhook parsed body:", JSON.stringify(body, null, 2));
+        console.log("[RevenueCat] ✓ Webhook parsed successfully, event type:", body.event?.type);
 
         // Handle the event
         console.log("[RevenueCat] Calling handleRevenueCatEvent...");

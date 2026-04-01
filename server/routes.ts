@@ -44,17 +44,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const subscription = (req as any).subscription;
       const { text } = req.body;
 
+      // 🔥 CRITICAL DEBUG LOGGING
+      console.log("[ANALYZE] ════════════════════════════════════════");
+      console.log("[ANALYZE] User ID:", user?.id);
+      console.log("[ANALYZE] Subscription Data:", {
+        isSubscribed: subscription?.isSubscribed,
+        isPaid: subscription?.isPaid,
+        isTrialActive: subscription?.isTrialActive,
+        plan: subscription?.plan,
+      });
+
       // Validate user exists
       if (!user || !user.id) {
+        console.error("[ANALYZE] ❌ User not found");
         return res.status(401).json({ error: "User not found" });
       }
 
       if (!text || typeof text !== "string") {
+        console.error("[ANALYZE] ❌ Text is required");
         return res.status(400).json({ error: "Text is required" });
       }
 
       // Check subscription or free tier limit
       if (!subscription?.isSubscribed) {
+        console.log("[ANALYZE] 🔍 User is NOT subscribed - checking free tier limit");
+        
         // Free tier: 2 replies per day
         // Get today's date at midnight UTC
         const now = new Date();
@@ -67,14 +81,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ),
         });
 
+        console.log("[ANALYZE] Today's conversations count:", todayConversations.length);
+
         if (todayConversations.length >= 2) {
+          console.log("[ANALYZE] ❌ BLOCKED - Daily free limit reached");
           return res.status(429).json({
             error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
             remaining: 0,
           });
         }
+        console.log("[ANALYZE] ✓ Free user under limit - allowing request");
+      } else {
+        console.log("[ANALYZE] ✓ User is SUBSCRIBED - allowing unlimited access");
       }
 
+      console.log("[ANALYZE] Calling OpenRouter API...");
       const response = await openrouter.chat.completions.create({
         model: MODEL,
         messages: [
@@ -90,6 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
+        console.error("[ANALYZE] ❌ No response from AI");
         return res.status(500).json({ error: "No response from AI" });
       }
 
@@ -98,6 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         parsed = JSON.parse(cleaned);
       } catch {
+        console.error("[ANALYZE] ❌ Failed to parse AI response");
         return res.status(500).json({ error: "Failed to parse AI response" });
       }
 
@@ -113,7 +136,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
             replies: parsed.replies || {},
           });
+        console.log("[ANALYZE] ✓ Conversation saved to database");
       } catch (dbError) {
+        console.error("[ANALYZE] ⚠️  DB save failed:", dbError);
         // Log to error tracking, don't fail the request
       }
 
@@ -123,9 +148,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId: undefined,
       };
 
+      console.log("[ANALYZE] ✓ SUCCESS - Returning response");
+      console.log("[ANALYZE] ════════════════════════════════════════");
       return res.json(responseData);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("[ANALYZE] ❌ FATAL ERROR:", msg);
+      console.log("[ANALYZE] ════════════════════════════════════════");
       return res.status(500).json({ error: msg });
     }
   });

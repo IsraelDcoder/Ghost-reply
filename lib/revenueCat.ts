@@ -231,6 +231,20 @@ export async function restorePurchases(): Promise<{
 }
 
 /**
+ * Sync purchases with RevenueCat backend
+ * Forces a refresh of customer info from RevenueCat servers
+ * Useful after a purchase to ensure entitlements are propagated
+ */
+export async function syncPurchases(): Promise<void> {
+  try {
+    await Purchases.syncPurchases();
+  } catch (error) {
+    console.warn("[RevenueCat] Warning: syncPurchases failed:", error);
+    // Don't throw - this is non-critical
+  }
+}
+
+/**
  * Logout user (reset to anonymous)
  * Clears current user ID and associated purchases
  */
