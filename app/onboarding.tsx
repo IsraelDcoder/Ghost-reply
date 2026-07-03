@@ -21,70 +21,44 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const SLIDES = [
   {
-    id: "0",
-    type: "splash",
-    gradient: ["#0B0B1A", "#0B0B1A", "#0B0B1A"] as const,
-  },
-  {
     id: "1",
     emoji: "👻",
-    title: "Ghost Reply",
+    title: "Never Get Ghosted Again",
     subtitle:
-      "Never overthink a text again. AI-powered replies for any conversation — from dating apps to professional messages.",
+      "Upload a screenshot or paste your chat. GhostReply writes the perfect reply in seconds.",
     gradient: ["#0A0A1A", "#0F0F2E", "#1A0A2E"] as const,
     accentColor: "#7B6CFF",
-    context: "What is Ghost Reply?",
+    context: "AI-powered conversation coach",
   },
   {
     id: "2",
-    emoji: "📍",
-    title: "The Problem",
+    emoji: "✍️",
+    title: "Upload & Reply",
     subtitle:
-      "Struggling to respond? Worried your message won't land right? Spending too much time crafting the perfect reply?",
-    gradient: ["#0A0A1A", "#1A0F2E", "#0F1A2E"] as const,
-    accentColor: "#FF6B9D",
-    context: "You're not alone",
-    details: ["Blank screen anxiety", "Fear of saying the wrong thing", "Analysis paralysis"],
+      "Our AI reads your conversation and creates the right message for the tone you want.",
+    gradient: ["#0A0A1A", "#140F34", "#081227"] as const,
+    accentColor: "#4ECDC4",
+    details: ["Screenshot upload", "Fast reply generation", "Tone-aware responses"],
   },
   {
     id: "3",
-    emoji: "⚡",
-    title: "The Solution",
+    emoji: "💬",
+    title: "Say It With Confidence",
     subtitle:
-      "Snap a screenshot or paste text. Our AI reads the context and generates replies that match your personality.",
-    gradient: ["#0A0A1A", "#0F1A2E", "#1A0A2E"] as const,
-    accentColor: "#4ECDC4",
-    context: "How it works",
-  },
-  {
-    id: "4",
-    emoji: "🎯",
-    title: "Choose Your Tone",
-    subtitle:
-      "Every reply can be perfectly calibrated. Want to be confident? Funny? Flirty? We've got the tone for you.",
-    gradient: ["#0A0A1A", "#1A0A1A", "#2E0A1A"] as const,
-    accentColor: "#FFD700",
+      "Choose the tone — confident, flirty, funny or sharp — and send better replies every time.",
+    gradient: ["#0A0A1A", "#1F0A31", "#120C27"] as const,
+    accentColor: "#FF6B9D",
     tones: ["😎 Confident", "😏 Flirty", "😂 Funny", "🔥 Savage", "🧠 Smart"],
   },
   {
-    id: "5",
-    emoji: "💡",
-    title: "Where to Use It",
+    id: "4",
+    emoji: "💎",
+    title: "Unlock Your Superpowers",
     subtitle:
-      "Tinder, Bumble, Instagram DMs, WhatsApp, professional emails — any chat app where words matter.",
-    gradient: ["#0A0A1A", "#0F1A2E", "#1A0F2E"] as const,
-    accentColor: "#FF6B9D",
-    useCases: ["Dating apps", "Text messages", "Professional replies", "Social media DMs"],
-  },
-  {
-    id: "6",
-    emoji: "🚀",
-    title: "Ready to\ncraft better replies?",
-    subtitle:
-      "Get unlimited access to AI-powered replies that actually convert. Start free, upgrade anytime.",
-    gradient: ["#1A0A2E", "#0F0F2E", "#0A0A1A"] as const,
-    accentColor: "#7B6CFF",
-    context: "Let's go",
+      "Unlimited AI replies, premium tones, and no daily limits. Subscribe now to proceed.",
+    gradient: ["#120A24", "#140F3B", "#0A0A1A"] as const,
+    accentColor: "#FFD700",
+    context: "Subscribe to continue",
   },
 ];
 
@@ -139,83 +113,47 @@ export default function OnboardingScreen() {
           const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
           setCurrentIndex(index);
         }}
-        renderItem={({ item }: any) => {
-          if (item.type === "splash") {
-            return (
-              <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: "#0B0B1A" }]}>
-                <LinearGradient
-                  colors={["rgba(236, 72, 153, 0.2)", "rgba(139, 92, 246, 0.1)"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.gradientOverlay}
-                />
-                <View style={styles.splashContent}>
-                  <Text style={styles.splashTitle}>GHOSTREPLY</Text>
-                  <Text style={styles.splashSubtitle}>AI-Powered Replies</Text>
-                </View>
+        renderItem={({ item }: any) => (
+          <View style={[styles.slide, { width: SCREEN_WIDTH }]}> 
+            <View style={styles.slideContent}>
+              {item.context && <Text style={styles.contextText}>{item.context}</Text>}
+              <View
+                style={[
+                  styles.emojiContainer,
+                  { backgroundColor: item.accentColor + "20", borderColor: item.accentColor + "40" },
+                ]}
+              >
+                <Text style={styles.emoji}>{item.emoji}</Text>
               </View>
-            );
-          }
-          return (
-            <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-              <View style={styles.slideContent}>
-                {item.context && (
-                  <Text style={styles.contextText}>{item.context}</Text>
-                )}
-                
-                <View
-                  style={[
-                    styles.emojiContainer,
-                    { backgroundColor: item.accentColor + "20", borderColor: item.accentColor + "40" },
-                  ]}
-                >
-                  <Text style={styles.emoji}>{item.emoji}</Text>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.subtitle}>{item.subtitle}</Text>
+              {item.details && (
+                <View style={styles.detailsContainer}>
+                  {item.details.map((detail: string, i: number) => (
+                    <View key={i} style={styles.detailRow}>
+                      <Text style={[styles.detailBullet, { color: item.accentColor }]}>•</Text>
+                      <Text style={styles.detailText}>{detail}</Text>
+                    </View>
+                  ))}
                 </View>
-
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.subtitle}>{item.subtitle}</Text>
-
-                {item.details && (
-                  <View style={styles.detailsContainer}>
-                    {item.details.map((detail: string, i: number) => (
-                      <View key={i} style={styles.detailRow}>
-                        <Text style={[styles.detailBullet, { color: item.accentColor }]}>•</Text>
-                        <Text style={styles.detailText}>{detail}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {item.tones && (
-                  <View style={styles.tonesContainer}>
-                    {item.tones.map((tone: string, i: number) => (
-                      <View
-                        key={i}
-                        style={[styles.toneChip, { borderColor: item.accentColor + "60" }]}
-                      >
-                        <Text style={[styles.toneText, { color: item.accentColor }]}>
-                          {tone}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {item.useCases && (
-                  <View style={styles.useCasesContainer}>
-                    {item.useCases.map((useCase: string, i: number) => (
-                      <View key={i} style={styles.useCaseChip}>
-                        <Text style={[styles.useCaseText, { color: item.accentColor }]}>
-                          ✓ {useCase}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
+              )}
+              {item.tones && (
+                <View style={styles.tonesContainer}>
+                  {item.tones.map((tone: string, i: number) => (
+                    <View
+                      key={i}
+                      style={[styles.toneChip, { borderColor: item.accentColor + "60" }]}
+                    >
+                      <Text style={[styles.toneText, { color: item.accentColor }]}> 
+                        {tone}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
-          );
-        }}
+          </View>
+        )}
       />
 
       <View

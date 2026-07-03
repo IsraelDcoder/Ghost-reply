@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -49,12 +49,14 @@ export default function HomeScreen() {
     }, [refreshSubscriptionStatus])
   );
 
-  // 🔥 NEW: Use explicit isPro state for clearer logic
-  // If user is PRO (paid or trial), they have unlimited access
-  // Otherwise, check backend daily limit for free users
-  const canAnalyze = isPro || ((dailyLimit?.remaining ?? 0) > 0);
-  // 🔥 NEW: Use isPro for remaining replies calculation
-  const remainingReplies = isPro ? Infinity : (dailyLimit?.remaining ?? 0);
+  const canAnalyze = isPro;
+
+  useEffect(() => {
+    if (!loading && !isPro) {
+      console.log("[Home] User is not subscribed, redirecting to paywall");
+      router.replace("/paywall");
+    }
+  }, [loading, isPro]);
 
   const handlePickImage = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -147,8 +149,8 @@ export default function HomeScreen() {
 
   const showLimitAlert = () => {
     Alert.alert(
-      "Daily limit reached",
-      "You've used your 2 free replies today. Upgrade to Pro for unlimited replies.",
+      "Subscription required",
+      "GhostReply is available only for subscribed users. Please upgrade to continue.",
       [
         { text: "Not now", style: "cancel" },
         { text: "Upgrade", onPress: () => router.push("/paywall") },
@@ -241,27 +243,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {!isPro && (
-          <Pressable
-            onPress={() => router.push("/paywall")}
-            style={styles.freeBanner}
-          >
-            <LinearGradient
-              colors={["#7B6CFF20", "#A855F710"]}
-              style={styles.freeBannerGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="flash" size={14} color="#7B6CFF" />
-              <Text style={styles.freeBannerText}>
-                {remainingReplies > 0
-                  ? `${remainingReplies} free ${remainingReplies === 1 ? "reply" : "replies"} remaining today`
-                  : "Daily limit reached — Upgrade for unlimited"}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color="#7B6CFF" />
-            </LinearGradient>
-          </Pressable>
-        )}
 
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>What's the situation?</Text>

@@ -5,22 +5,24 @@
 
 import type { Express, Request, Response } from "express";
 import { db } from "./subscription-service";
-import {
-  getUserSubscriptionStatus,
-  startFreeTrial,
-  shouldEnforceDailyLimits,
-  getDailyLimitForUser,
-} from "./subscription-service";
+import { getUserSubscriptionStatus } from "./subscription-service";
 import { userSubscriptions, conversations } from "@/shared/schema";
 import { eq, gte, and } from "drizzle-orm";
 import OpenAI from "openai";
+
+type OpenRouterChatMessage = {
+  role: "system" | "user";
+  content: string;
+};
 
 export async function registerSubscriptionRoutes(app: Express): Promise<void> {
   const openrouter = new OpenAI({
     baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL,
     apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
   });
-  const MODEL = "anthropic/claude-3-5-haiku";
+  const OPENROUTER_MODEL =
+    process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "anthropic/claude-3.5";
+  const OPENROUTER_FALLBACK_MODEL = "anthropic/claude-3.5";
   const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
 {
@@ -36,6 +38,35 @@ Return ONLY valid JSON, no markdown.
     "smart": "<reply under 20 words>"
   }
 }`;
+
+  async function createOpenRouterChatCompletion(options: {
+    model: string;
+    messages: OpenRouterChatMessage[];
+    max_tokens: number;
+    temperature: number;
+  }) {
+    try {
+      return await openrouter.chat.completions.create(options as any);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : JSON.stringify(error);
+      console.error("[OpenRouter] Chat completion failed:", message);
+
+      if (
+        message.includes("404") &&
+        options.model !== OPENROUTER_FALLBACK_MODEL
+      ) {
+        console.warn(
+          `[OpenRouter] Model ${options.model} not found, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
+        );
+        return await openrouter.chat.completions.create({
+          ...options,
+          model: OPENROUTER_FALLBACK_MODEL,
+        } as any);
+      }
+
+      throw error;
+    }
+  }
 
   /**
    * GET /api/subscription/status
@@ -58,79 +89,6 @@ Return ONLY valid JSON, no markdown.
   }
   });
 
-  /**
-   * POST /api/subscription/start-trial
-   * Start a 30-day free trial for the user
-   * Returns: { isSubscribed, isPaid, isTrialActive, plan, daysRemaining }
-   */
-  app.post("/api/subscription/start-trial", async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    // Check if user already has an active subscription or trial
-    const currentStatus = await getUserSubscriptionStatus(user.id);
-    if (currentStatus.isSubscribed) {
-      return res.status(400).json({
-        error: "User already has an active subscription or trial",
-        currentPlan: currentStatus.plan,
-      });
-    }
-
-    // Start the trial
-    const newStatus = await startFreeTrial(user.id);
-
-    return res.json({
-      success: true,
-      message: "Free trial started successfully",
-      ...newStatus,
-    });
-  } catch (error) {
-    console.error("Start trial error:", error);
-    return res.status(500).json({ error: "Failed to start free trial" });
-  }
-  });
-
-  /**
-   * GET /api/subscription/daily-limit
-   * Get the daily limit for the current user
-   * Free users get 2, everyone else gets unlimited
-   */
-  app.get("/api/subscription/daily-limit", async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const dailyLimit = await getDailyLimitForUser(user.id);
-    const status = await getUserSubscriptionStatus(user.id);
-
-    // Count today's conversations
-    // Get today's date at midnight UTC
-    const now = new Date();
-    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
-    const todayConversations = await db.query.conversations.findMany({
-      where: and(
-        eq(conversations.userId, user.id),
-        gte(conversations.createdAt, today)
-      ),
-    });
-
-    return res.json({
-      dailyLimit,
-      used: todayConversations.length,
-      remaining: Math.max(0, dailyLimit - todayConversations.length),
-      isUnlimited: dailyLimit === Infinity,
-      plan: status.plan,
-    });
-  } catch (error) {
-    console.error("Daily limit error:", error);
-    return res.status(500).json({ error: "Failed to get daily limit" });
-  }
-  });
 
   /**
    * POST /api/subscription/confirm-purchase
@@ -233,31 +191,15 @@ Return ONLY valid JSON, no markdown.
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // CHECK DAILY LIMITS USING NEW SERVICE
-    const shouldEnforce = await shouldEnforceDailyLimits(user.id);
-
-    if (shouldEnforce) {
-      // This is a free user - check daily limit
-      const today = new Date().toDateString();
-      const todayConversations = await db.query.conversations.findMany({
-        where: and(
-          eq(conversations.userId, user.id),
-          gte(conversations.createdAt, new Date(today))
-        ),
+    if (!(await getUserSubscriptionStatus(user.id)).isPaid) {
+      return res.status(403).json({
+        error: "Subscription required. Please upgrade to Pro to analyze conversations.",
       });
-
-      if (todayConversations.length >= 2) {
-        return res.status(429).json({
-          error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
-          remaining: 0,
-          limit: 2,
-        });
-      }
     }
 
     // ... rest of the analysis logic
-    const response = await openrouter.chat.completions.create({
-      model: MODEL,
+    const response = await createOpenRouterChatCompletion({
+      model: OPENROUTER_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {

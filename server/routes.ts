@@ -18,8 +18,14 @@ const openrouter = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
 });
 
-// Use Claude 3.5 Haiku - fast, reliable, and highly available on OpenRouter
-const MODEL = "anthropic/claude-3-5-haiku";
+const OPENROUTER_MODEL =
+  process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "anthropic/claude-3.5";
+const OPENROUTER_FALLBACK_MODEL = "anthropic/claude-3.5";
+
+type OpenRouterChatMessage = {
+  role: "system" | "user";
+  content: string;
+};
 
 const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
@@ -36,6 +42,35 @@ Return ONLY valid JSON, no markdown.
     "smart": "<reply under 20 words>"
   }
 }`;
+
+async function createOpenRouterChatCompletion(options: {
+  model: string;
+  messages: OpenRouterChatMessage[];
+  max_tokens: number;
+  temperature: number;
+}) {
+  try {
+    return await openrouter.chat.completions.create(options as any);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
+    console.error("[OpenRouter] Chat completion failed:", message);
+
+    if (
+      message.includes("404") &&
+      options.model !== OPENROUTER_FALLBACK_MODEL
+    ) {
+      console.warn(
+        `[OpenRouter] Model ${options.model} not found, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
+      );
+      return await openrouter.chat.completions.create({
+        ...options,
+        model: OPENROUTER_FALLBACK_MODEL,
+      } as any);
+    }
+
+    throw error;
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/analyze", async (req: Request, res: Response) => {
@@ -65,49 +100,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Text is required" });
       }
 
-      // Check subscription or free tier limit
       if (!subscription?.isSubscribed) {
-        console.log("[ANALYZE] 🔍 User is NOT subscribed - checking free tier limit");
-        
-        // Free tier: 2 replies per day
-        // Get today's date at midnight UTC
-        const now = new Date();
-        const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
-        const todayConversations = await db.query.conversations.findMany({
-          where: (fields, operators) =>
-            operators.and(
-              operators.eq(fields.userId, user.id),
-              operators.gte(fields.createdAt, today)
-            ),
+        console.log("[ANALYZE] 🔍 User is NOT subscribed - blocking access");
+        return res.status(403).json({
+          error: "Subscription required. Please upgrade to Pro to analyze conversations.",
         });
-
-        console.log("[ANALYZE] Today's conversations count:", todayConversations.length);
-
-        if (todayConversations.length >= 2) {
-          console.log("[ANALYZE] ❌ BLOCKED - Daily free limit reached");
-          return res.status(429).json({
-            error: "Daily free limit reached. Upgrade to Pro for unlimited replies.",
-            remaining: 0,
-          });
-        }
-        console.log("[ANALYZE] ✓ Free user under limit - allowing request");
-      } else {
-        console.log("[ANALYZE] ✓ User is SUBSCRIBED - allowing unlimited access");
       }
+      console.log("[ANALYZE] ✓ User is SUBSCRIBED - allowing unlimited access");
 
       console.log("[ANALYZE] Calling OpenRouter API...");
-      const response = await openrouter.chat.completions.create({
-        model: MODEL,
+      const response = await createOpenRouterChatCompletion({
+        model: OPENROUTER_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
             content: `Conversation:\n${text}`,
           },
-        ],
+        ] as OpenRouterChatMessage[],
         max_tokens: 350,
         temperature: 0.8,
-      });
+      } as any);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -195,7 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const response = await openrouter.chat.completions.create({
-        model: MODEL,
+        model: OPENROUTER_MODEL,
         messages: [
           {
             role: "system",

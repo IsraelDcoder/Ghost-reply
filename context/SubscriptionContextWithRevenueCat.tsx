@@ -82,27 +82,28 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [error, setError] = useState<string | null>(null);
   const [appState, setAppState] = useState(AppState.currentState);
   const [isPro, setIsPro] = useState(false); // 🔥 Global PRO state
+  const [isSubscriptionInitialized, setIsSubscriptionInitialized] = useState(false);
 
   /**
    * Initialize RevenueCat on app start
    */
   useEffect(() => {
     const initializeSubscriptions = async () => {
+      if (!deviceId) {
+        console.log("[Subscription] Waiting for deviceId...");
+        return;
+      }
+
       try {
         setLoading(true);
-        
-        if (!deviceId) {
-          console.log("[Subscription] Waiting for deviceId...");
-          return;
-        }
-        
+
         console.log("[Subscription] Initializing RevenueCat with deviceId:", deviceId);
 
         // Initialize RevenueCat SDK with device ID for webhook correlation
         await initializeRevenueCat(deviceId);
 
-        // Fetch initial subscription status
-        await refreshSubscriptionStatus();
+        // Fetch initial subscription status with loading UI
+        await refreshSubscriptionStatus({ showLoading: true });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Initialization failed";
         console.error("[Subscription] Init error:", errorMessage);
@@ -131,7 +132,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     if (appState.match(/inactive|background/) && nextAppState === "active") {
       console.log("[Subscription] App came to foreground - refreshing status");
-      await refreshSubscriptionStatus();
+      refreshSubscriptionStatus({ showLoading: false }).catch((err) => {
+        console.warn("[Subscription] Background refresh failed:", err);
+      });
     }
 
     setAppState(nextAppState);
@@ -141,12 +144,19 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
    * Fetch current subscription status from RevenueCat
    * Falls back to backend for daily limits
    */
-  const refreshSubscriptionStatus = useCallback(async () => {
+  const refreshSubscriptionStatus = useCallback(async ({ showLoading = false } = {}) => {
+    const shouldShowLoading = showLoading || !isSubscriptionInitialized;
+
     try {
-      setLoading(true);
+      if (shouldShowLoading) {
+        setLoading(true);
+      }
       setError(null);
 
-      console.log("[Subscription] Refreshing subscription status...");
+      console.log("[Subscription] Refreshing subscription status...", {
+        showLoading,
+        isSubscriptionInitialized,
+      });
 
       // Check if user has premium entitlement via RevenueCat
       const hasPremium = await checkEntitlement(ENTITLEMENT_ID);
@@ -179,7 +189,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           const backendStatus = await backendStatusRes.json();
 
           status = backendStatus;
-          isProUser = backendStatus.isTrialActive; // 🔥 Trial users are also PRO
+          isProUser = false; // Trials do not grant access in hard paywall mode
           console.log("[Subscription] Backend status - plan:", backendStatus.plan, "isTrialActive:", backendStatus.isTrialActive);
         } catch (err) {
           // Backend error - assume free tier
@@ -204,17 +214,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
       setSubscriptionStatus(status);
       setIsPro(isProUser); // 🔥 SET GLOBAL isPro STATE
-
-      // Fetch daily limit from backend
-      const limitRes = await apiRequest("GET", "/api/subscription/daily-limit");
-      const limitData = await limitRes.json();
-      setDailyLimit(limitData);
+      setIsSubscriptionInitialized(true);
+      setDailyLimit(null);
 
       console.log("[Subscription] ✓ Status updated:", {
         plan: status.plan,
         isPaid: status.isPaid,
         isTrialActive: status.isTrialActive,
-        remaining: limitData.remaining,
         isPro: isProUser,
       });
     } catch (err) {
@@ -222,9 +228,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       console.error("[Subscription] Error refreshing status:", errorMessage);
       setError(errorMessage);
     } finally {
-      setLoading(false);
+      if (shouldShowLoading) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [isSubscriptionInitialized]);
 
   /**
    * Purchase a subscription via RevenueCat
@@ -365,17 +373,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
    * 🔥 NEW: Uses explicit isPro state for immediate logic
    */
   const canAnalyzeConversation = (): boolean => {
-    // 🔥 MAIN CHECK: If user is PRO (paid or trial), unlimited access
-    if (isPro) {
-      return true;
-    }
-
-    // If not PRO, check daily limit for free users
-    if (dailyLimit && dailyLimit.remaining > 0) {
-      return true;
-    }
-
-    return false; // No access
+    // 🔥 MAIN CHECK: Only PRO users can analyze in hard paywall mode
+    return isPro;
   };
 
   /**
@@ -383,11 +382,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
    * 🔥 NEW: Uses explicit isPro state
    */
   const getRemainingAnalyses = (): number => {
-    if (isPro) {
-      return -1; // Unlimited for PRO users
-    }
-
-    return dailyLimit?.remaining ?? 0; // Return daily limit for free users
+    return isPro ? -1 : 0;
   };
 
   /**
@@ -404,11 +399,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
     if (hasPaidSubscription) {
       console.log("[Subscription] Bypassing paywall - user has paid subscription");
-      return true;
-    }
-
-    if (hasActiveTrial) {
-      console.log("[Subscription] Bypassing paywall - user has active trial");
       return true;
     }
 

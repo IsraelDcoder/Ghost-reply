@@ -210,32 +210,7 @@ export default function PaywallScreenWithRevenueCat() {
     }
   };
 
-  /**
-   * Continue with free plan
-   * Does NOT call RevenueCat - just navigates to home as free-tier user
-   * This is a simple navigation, no subscription logic needed
-   */
-  const handleContinueWithFree = async () => {
-    try {
-      console.log("[Paywall] User tapped free plan button");
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      
-      console.log("[Paywall] Marking onboarded and navigating to home...");
-      // setHasOnboarded is async and persists to storage - MUST await it
-      await setHasOnboarded(true);
-      
-      // Small delay to ensure AsyncStorage persists and state updates complete
-      setTimeout(() => {
-        console.log("[Paywall] ✓ State persisted, now navigating to /home");
-        router.replace("/home");
-      }, 500);
-    } catch (error) {
-      console.error("[Paywall] Error in free plan flow:", error);
-      console.error("[Paywall] Error details:", JSON.stringify(error));
-      Alert.alert("Error", `Could not continue. Error: ${error}`);
-    }
-  };
-
+  // No free-plan or skip option: paywall is strict in hard-paywall mode
   /**
    * Restore previous purchases
    */
@@ -289,19 +264,11 @@ export default function PaywallScreenWithRevenueCat() {
               ? "No internet connection. Please check your network."
               : offeringsError}
           </Text>
-          <Pressable
+                <Pressable
             onPress={fetchOfferings}
             style={styles.retryButton}
           >
             <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
-
-          {/* Fallback to free plan option */}
-          <Pressable
-            onPress={handleContinueWithFree}
-            style={styles.skipsButton}
-          >
-            <Text style={styles.skipButtonText}>Continue with Free Plan</Text>
           </Pressable>
         </View>
       </LinearGradient>
@@ -328,133 +295,47 @@ export default function PaywallScreenWithRevenueCat() {
           <Text style={styles.testimonialText}>\"{SOCIAL_PROOF.testimonial}\" — {SOCIAL_PROOF.testimonialAuthor}</Text>
         </View>
 
-        {/* Plans - From RevenueCat Offerings */}
-        <View style={styles.plansContainer}>
-          {/* Weekly Plan */}
-          {plans.get("weekly") && (
-            <Pressable
-              onPress={() => setSelectedPlan("weekly")}
-              style={[
-                styles.planCard,
-                selectedPlan === "weekly" && styles.planCardSelected,
-              ]}
-            >
-              <Text style={styles.planHeadline}>Instant Smart Replies Every Day</Text>
-              <View style={styles.planBadge}>
-                <Text style={styles.badgeEmoji}>{plans.get("weekly")?.badge.emoji}</Text>
-                <Text style={styles.badgeText}>{plans.get("weekly")?.badge.text}</Text>
-              </View>
-              <View style={styles.priceContainer}>
-                <Text style={styles.price}>{plans.get("weekly")?.priceString}</Text>
-                <Text style={styles.period}>{plans.get("weekly")?.period}</Text>
-              </View>
-              <Text style={styles.pricingNote}>— Cancel anytime</Text>
-              <View style={styles.featuresBox}>
-                {plans.get("weekly")?.features.map((feature, idx) => (
-                  <Text key={idx} style={styles.planFeature}>
-                    {feature}
-                  </Text>
-                ))}
-              </View>
-            </Pressable>
-          )}
+        {/* Simplified single-plan UI */}
+        <View style={styles.plansContainerCompact}>
+          <View style={styles.heroRow}>
+            <Text style={styles.heroTitle}>Unlock Infinite Replies</Text>
+            <Text style={styles.heroSubtitle}>Unlimited AI replies, premium tones, and advanced reply controls.</Text>
+          </View>
 
-          {/* Monthly Plan - Premium Option */}
-          {plans.get("monthly") && (
-            <View>
-              <Pressable
-                onPress={() => setSelectedPlan("monthly")}
-                style={[
-                  styles.planCard,
-                  selectedPlan === "monthly" && styles.planCardSelected,
-                  selectedPlan === "monthly" && styles.planCardPremium,
-                ]}
-              >
-                {selectedPlan === "monthly" && (
-                  <View style={styles.checkmarkContainer}>
-                    <Text style={styles.checkmark}>✓</Text>
-                  </View>
-                )}
-                <Text style={styles.planHeadline}>Level Up Your Messaging Game</Text>
-                <View style={styles.planBadgeContainer}>
-                  <View style={styles.planBadge}>
-                    <Text style={styles.badgeEmoji}>{plans.get("monthly")?.badge.emoji}</Text>
-                    <Text style={[styles.badgeText, styles.bestValueBadge]}>{plans.get("monthly")?.badge.text}</Text>
-                  </View>
-                </View>
-                <View style={styles.priceContainer}>
-                  <Text style={styles.price}>{plans.get("monthly")?.priceString}</Text>
-                  <Text style={styles.period}>{plans.get("monthly")?.period}</Text>
-                </View>
-                <Text style={styles.pricingNote}>— Unlimited access</Text>
-                <View style={styles.featuresBox}>
-                  {plans.get("monthly")?.features.map((feature, idx) => (
-                    <Text key={idx} style={styles.planFeature}>
-                      {feature}
-                    </Text>
-                  ))}
-                </View>
-              </Pressable>
+          <View style={styles.singlePlanCard}>
+            <View style={styles.singlePlanHeader}>
+              <Text style={styles.singlePlanBadge}>💎 Best Value</Text>
+              <Text style={styles.singlePlanPrice}>{plans.get("monthly")?.priceString ?? "$9.99"}</Text>
+              <Text style={styles.singlePlanPeriod}>{plans.get("monthly")?.period ?? "/month"}</Text>
             </View>
-          )}
+            <View style={styles.singlePlanFeatures}>
+              <Text style={styles.feature}>• Unlimited replies</Text>
+              <Text style={styles.feature}>• Tone & personality control</Text>
+              <Text style={styles.feature}>• Priority processing</Text>
+            </View>
+            <Pressable
+              onPress={handlePurchaseSubscription}
+              disabled={isPurchasing}
+              style={({ pressed }) => [styles.primaryButtonCompact, { opacity: pressed ? 0.9 : 1 }]}
+            >
+              {isPurchasing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonTextCompact}>Start Premium — {plans.get("monthly")?.priceString ?? "$9.99"}</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.buttonsSection}>
-          {/* Subscribe Button - High Converting CTA */}
-          <Pressable
-            onPress={handlePurchaseSubscription}
-            disabled={isPurchasing}
-            style={[
-              styles.primaryButton,
-              isPurchasing && styles.buttonDisabled,
-            ]}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            {isPurchasing ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <View style={styles.ctaContent}>
-                <Text style={styles.primaryButtonText}>
-                  {selectedPlan === "weekly" 
-                    ? "Upgrade Now → Get Unlimited Replies" 
-                    : "Upgrade Now → Unlock Full Power"}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
 
-        {/* Subtle Free Option at Bottom */}
-        <View style={styles.freeOptionSection}>
-          <Text style={styles.freeOptionText}>Want to try first?</Text>
-          <Pressable 
-            onPress={handleContinueWithFree}
-            style={styles.freeButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.freeButtonText}>Use 2 Free Replies Daily</Text>
+        {/* Footer Links (compact) */}
+        <View style={styles.footerLinksCompact}>
+          <Pressable onPress={handleRestorePurchases} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.footerLinkCompact}>Restore purchase</Text>
           </Pressable>
-        </View>
-
-        {/* Footer Links */}
-        <View style={styles.footerLinks}>
-          <Pressable 
-            onPress={() => Linking.openURL("mailto:theonyekachithompson@gmail.com")}
-            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-          >
-            <Text style={styles.footerLink}>Email</Text>
-          </Pressable>
-          <Text style={styles.footerDivider}>·</Text>
-          <Pressable 
-            onPress={() => Linking.openURL("https://ghostreply-app.netlify.app/")}
-            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-          >
-            <Text style={styles.footerLink}>Terms</Text>
-          </Pressable>
-          <Text style={styles.footerDivider}>·</Text>
-          <Pressable onPress={handleRestorePurchases} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
-            <Text style={styles.footerLink}>Restore</Text>
+          <Text style={styles.footerDividerCompact}>·</Text>
+          <Pressable onPress={() => Linking.openURL("https://ghostreply-app.netlify.app/") }>
+            <Text style={styles.footerLinkCompact}>Terms</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -833,5 +714,88 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     textDecorationLine: "underline",
+  },
+  /* Compact/simplified paywall styles */
+  plansContainerCompact: {
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  heroRow: {
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  heroTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    color: "#bfbfdc",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  singlePlanCard: {
+    backgroundColor: "#0f0f2a",
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+  },
+  singlePlanHeader: {
+    alignItems: "center",
+  },
+  singlePlanBadge: {
+    color: "#ffd66b",
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  singlePlanPrice: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: "800",
+  },
+  singlePlanPeriod: {
+    color: "#9b9bbf",
+    fontSize: 14,
+  },
+  singlePlanFeatures: {
+    marginTop: 8,
+    alignItems: "flex-start",
+    width: "100%",
+  },
+  feature: {
+    color: "#ddd",
+    fontSize: 14,
+    marginVertical: 4,
+  },
+  primaryButtonCompact: {
+    backgroundColor: "#7B6CFF",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
+  },
+  primaryButtonTextCompact: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  footerLinksCompact: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 24,
+  },
+  footerLinkCompact: {
+    color: "#9b9bbf",
+    fontSize: 12,
+  },
+  footerDividerCompact: {
+    color: "#666",
   },
 });
