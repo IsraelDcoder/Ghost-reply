@@ -26,6 +26,7 @@ import {
 import { apiRequest } from "@/lib/query-client";
 import { Colors } from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
+import { useSubscription } from "@/context/SubscriptionContextWithRevenueCat";
 
 interface AIResult {
   analysis: string;
@@ -97,6 +98,7 @@ export default function ResultScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const { deviceId } = useApp();
+  const { requirePremiumAccess } = useSubscription();
   const [result, setResult] = useState<AIResult>(() => {
     try {
       return JSON.parse(params.data as string);
@@ -135,6 +137,10 @@ export default function ResultScreen() {
   };
 
   const handleRegenerate = async (personality: Personality) => {
+    if (!requirePremiumAccess()) {
+      return;
+    }
+
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRegeneratingKey(personality.key);
 

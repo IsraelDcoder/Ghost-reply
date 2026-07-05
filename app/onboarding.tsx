@@ -55,7 +55,7 @@ function FadeInCard({ active, reducedMotion, children }: FadeInCardProps) {
     transform: [{ translateY: translateY.value }],
   }));
 
-  return <Animated.View style={animatedStyle}>{children}</Animated.View>;
+  return <Animated.View style={[styles.fadeCard, animatedStyle]}>{children}</Animated.View>;
 }
 
 function DemoCardContent({ stage, reducedMotion }: DemoCardContentProps) {
@@ -116,19 +116,19 @@ function DemoCardContent({ stage, reducedMotion }: DemoCardContentProps) {
         {stage === "reply-1" ? (
           <View style={styles.replyChip}>
             <Text style={styles.replyLabel}>💜 Flirty</Text>
-            <Text style={styles.replyText}>Only if you're asking me on a date 😉</Text>
+            <Text style={styles.replyText}>A little bold, a little playful.</Text>
           </View>
         ) : null}
         {stage === "reply-2" ? (
           <View style={styles.replyChip}>
             <Text style={styles.replyLabel}>💚 Funny</Text>
-            <Text style={styles.replyText}>Free tonight... dangerous combo 😎</Text>
+            <Text style={styles.replyText}>Light, charming, and easy to send.</Text>
           </View>
         ) : null}
         {stage === "reply-3" ? (
           <View style={styles.replyChip}>
             <Text style={styles.replyLabel}>💙 Confident</Text>
-            <Text style={styles.replyText}>Yes. What time?</Text>
+            <Text style={styles.replyText}>Clear, calm, and ready to go.</Text>
           </View>
         ) : null}
       </Animated.View>
@@ -227,7 +227,7 @@ export default function OnboardingScreen() {
       if (index >= words.length) {
         setProblemLineVisible(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        const delay = reducedMotion ? 700 : 1200;
+        const delay = reducedMotion ? 1600 : 2400;
         const timer = setTimeout(() => {
           if (!cancelled) setPhase("pain");
         }, delay);
@@ -237,7 +237,7 @@ export default function OnboardingScreen() {
       setProblemWords((prev) => [...prev, words[index]]);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       index += 1;
-      const timeout = setTimeout(step, reducedMotion ? 160 : 240);
+      const timeout = setTimeout(step, reducedMotion ? 420 : 560);
       return () => clearTimeout(timeout);
     };
 
@@ -269,31 +269,31 @@ export default function OnboardingScreen() {
       if (cancelled) return;
       switch (painStage) {
         case "typing-1": {
-          setPainText("I really li...");
+          setPainText("I want to say something...");
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          schedule(() => setPainStage("deleting-1"), reducedMotion ? 700 : 1000);
+          schedule(() => setPainStage("deleting-1"), reducedMotion ? 1800 : 2400);
           break;
         }
         case "deleting-1": {
           setPainText("");
-          schedule(() => setPainStage("typing-2"), reducedMotion ? 220 : 360);
+          schedule(() => setPainStage("typing-2"), reducedMotion ? 320 : 500);
           break;
         }
         case "typing-2": {
-          setPainText("I had fu...");
+          setPainText("But the words never land.");
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          schedule(() => setPainStage("deleting-2"), reducedMotion ? 700 : 1000);
+          schedule(() => setPainStage("deleting-2"), reducedMotion ? 1800 : 2400);
           break;
         }
         case "deleting-2": {
           setPainText("");
-          schedule(() => setPainStage("typing-3"), reducedMotion ? 220 : 360);
+          schedule(() => setPainStage("typing-3"), reducedMotion ? 320 : 500);
           break;
         }
         case "typing-3": {
-          setPainText("Thanks...");
+          setPainText("GhostReply makes it feel easy.");
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          schedule(() => setPainStage("deleting-3"), reducedMotion ? 700 : 1000);
+          schedule(() => setPainStage("deleting-3"), reducedMotion ? 1800 : 2400);
           break;
         }
         case "deleting-3": {
@@ -301,7 +301,7 @@ export default function OnboardingScreen() {
           schedule(() => {
             setPainStage("done");
             setPhase("solution");
-          }, reducedMotion ? 400 : 800);
+          }, reducedMotion ? 900 : 1300);
           break;
         }
         default:
@@ -318,31 +318,37 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (phase !== "solution") return;
+
     let cancelled = false;
-    const labels = ["Meet...", "Ghost Reply.", "AI replies\nthat sound\nlike YOU."];
+    const labels = ["Meet GhostReply", "A calmer reply,\nin seconds.", "A better text,\nwithout the overthinking."];
+    let currentIndex = 0;
 
     setSolutionLine(0);
+
     const step = () => {
       if (cancelled) return;
-      if (solutionLine >= labels.length - 1) {
+
+      if (currentIndex >= labels.length - 1) {
         const timeout = setTimeout(() => {
           if (!cancelled) setPhase("demo");
-        }, reducedMotion ? 900 : 1400);
+        }, reducedMotion ? 2200 : 3200);
         return () => clearTimeout(timeout);
       }
 
+      currentIndex += 1;
+      setSolutionLine(currentIndex);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      setSolutionLine((value) => value + 1);
-      const timeout = setTimeout(step, reducedMotion ? 700 : 1000);
+
+      const timeout = setTimeout(step, reducedMotion ? 1600 : 2200);
       return () => clearTimeout(timeout);
     };
 
-    const timeout = setTimeout(step, reducedMotion ? 450 : 700);
+    const timeout = setTimeout(step, reducedMotion ? 1000 : 1400);
     return () => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [phase, reducedMotion, solutionLine]);
+  }, [phase, reducedMotion]);
 
   useEffect(() => {
     if (phase !== "demo") return;
@@ -376,7 +382,7 @@ export default function OnboardingScreen() {
       }
     };
 
-    const timer = setTimeout(advance, reducedMotion ? 600 : 900);
+    const timer = setTimeout(advance, reducedMotion ? 900 : 1300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -392,18 +398,18 @@ export default function OnboardingScreen() {
         setShowBefore(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-    }, reducedMotion ? 250 : 500);
+    }, reducedMotion ? 800 : 1200);
 
     const second = setTimeout(() => {
       if (!cancelled) {
         setShowAfter(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-    }, reducedMotion ? 900 : 1300);
+    }, reducedMotion ? 1400 : 2200);
 
     const third = setTimeout(() => {
       if (!cancelled) setPhase("final");
-    }, reducedMotion ? 1800 : 2400);
+    }, reducedMotion ? 3400 : 4700);
 
     return () => {
       cancelled = true;
@@ -446,7 +452,7 @@ export default function OnboardingScreen() {
                   </Text>
                 ))}
               </View>
-              {problemLineVisible ? <Text style={styles.problemLine}>The right reply changes everything.</Text> : null}
+              {problemLineVisible ? <Text style={styles.problemLine}>A great reply should feel effortless, not stressful.</Text> : null}
             </View>
           </FadeInCard>
         );
@@ -477,11 +483,10 @@ export default function OnboardingScreen() {
                 <Text style={styles.logoText}>GhostReply</Text>
               </View>
               <Text style={styles.solutionTitle}>
-                {solutionLine >= 0 ? "Meet..." : ""}
+                {solutionLine >= 0 ? "Meet GhostReply" : ""}
               </Text>
-              <Text style={styles.solutionTitle}>{solutionLine >= 1 ? "Ghost Reply." : ""}</Text>
-              <Text style={styles.solutionSubtitle}>{solutionLine >= 2 ? "AI replies that sound like you." : ""}</Text>
-              <Text style={styles.solutionSubtitle}>{solutionLine >= 2 ? "Not like a robot." : ""}</Text>
+              <Text style={styles.solutionSubtitle}>{solutionLine >= 1 ? "A calmer reply, in seconds." : ""}</Text>
+              <Text style={styles.solutionSubtitle}>{solutionLine >= 2 ? "A better text, without the overthinking." : ""}</Text>
             </View>
           </FadeInCard>
         );
@@ -490,6 +495,7 @@ export default function OnboardingScreen() {
           <FadeInCard active reducedMotion={reducedMotion}>
             <View style={styles.centeredContent}>
               <Text style={styles.sceneEyebrow}>The product</Text>
+              <Text style={styles.demoCaption}>You send one message. GhostReply offers a few ways to respond.</Text>
               <DemoCardContent stage={demoStage} reducedMotion={reducedMotion} />
             </View>
           </FadeInCard>
@@ -508,9 +514,9 @@ export default function OnboardingScreen() {
           <FadeInCard active reducedMotion={reducedMotion}>
             <View style={styles.centeredContent}>
               <Text style={styles.sceneEyebrow}>Ready?</Text>
-              <Text style={styles.finalTitle}>Ready to never overthink a text again?</Text>
+              <Text style={styles.finalTitle}>Ready to make texting feel effortless?</Text>
               <Text style={styles.finalSubtitle}>
-                Join thousands of people using Ghost Reply to write better replies in seconds.
+                Join thousands of people using Ghost Reply to send replies that sound natural, warm, and confident.
               </Text>
               <Pressable onPress={handleGetStarted} style={styles.ctaButton}>
                 <LinearGradient colors={["#8B76FF", "#A855F7"]} style={styles.ctaGradient}>
@@ -552,10 +558,15 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
   },
+  fadeCard: {
+    flex: 1,
+    width: "100%",
+  },
   centeredContent: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    width: "100%",
     paddingHorizontal: 28,
     paddingTop: 40,
     paddingBottom: 40,
@@ -671,6 +682,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  demoCaption: {
+    color: "#D7D3F5",
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 16,
+    maxWidth: 320,
   },
   demoBadge: {
     backgroundColor: "rgba(139, 118, 255, 0.16)",

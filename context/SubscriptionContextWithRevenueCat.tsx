@@ -11,6 +11,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Alert, AppState, AppStateStatus } from "react-native";
+import { router } from "expo-router";
 import {
   initializeRevenueCat,
   getCustomerInfo,
@@ -68,6 +69,7 @@ interface SubscriptionContextType {
   getRemainingAnalyses: () => number;
   getAvailableOfferingsList: () => Promise<PurchaseOffering[]>;
   shouldBypassPaywall: () => boolean;
+  requirePremiumAccess: () => boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -395,7 +397,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     const hasPaidSubscription = subscriptionStatus.isPaid;
-    const hasActiveTrial = subscriptionStatus.isTrialActive;
 
     if (hasPaidSubscription) {
       console.log("[Subscription] Bypassing paywall - user has paid subscription");
@@ -404,6 +405,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
     return false;
   };
+
+  const requirePremiumAccess = useCallback((): boolean => {
+    if (isPro) {
+      return true;
+    }
+
+    router.push("/paywall");
+    return false;
+  }, [isPro]);
 
   const contextValue: SubscriptionContextType = {
     subscriptionStatus,
@@ -418,6 +428,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     getRemainingAnalyses,
     getAvailableOfferingsList,
     shouldBypassPaywall,
+    requirePremiumAccess,
   };
 
   return (

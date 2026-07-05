@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -30,7 +30,7 @@ import {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { incrementReplyCount } = useApp();
-  const { subscriptionStatus, dailyLimit, loading, canAnalyzeConversation, refreshSubscriptionStatus, isPro } = useSubscription();
+  const { loading, refreshSubscriptionStatus, requirePremiumAccess } = useSubscription();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"paste" | "screenshot" | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -49,20 +49,11 @@ export default function HomeScreen() {
     }, [refreshSubscriptionStatus])
   );
 
-  const canAnalyze = isPro;
-
-  useEffect(() => {
-    if (!loading && !isPro) {
-      console.log("[Home] User is not subscribed, redirecting to paywall");
-      router.replace("/paywall");
-    }
-  }, [loading, isPro]);
 
   const handlePickImage = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    if (!canAnalyze) {
-      showLimitAlert();
+    if (!requirePremiumAccess()) {
       return;
     }
 
@@ -139,23 +130,11 @@ export default function HomeScreen() {
       return;
     }
 
-    if (!canAnalyze) {
-      showLimitAlert();
+    if (!requirePremiumAccess()) {
       return;
     }
 
     await analyzeText(text);
-  };
-
-  const showLimitAlert = () => {
-    Alert.alert(
-      "Subscription required",
-      "GhostReply is available only for subscribed users. Please upgrade to continue.",
-      [
-        { text: "Not now", style: "cancel" },
-        { text: "Upgrade", onPress: () => router.push("/paywall") },
-      ]
-    );
   };
 
   const analyzeText = async (inputText: string) => {
@@ -187,6 +166,10 @@ export default function HomeScreen() {
 
   const handlePickupLines = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!requirePremiumAccess()) {
+      return;
+    }
+
     await analyzeText(
       "I want some creative pickup lines. Make them clever, funny, and charming. Not too cheesy."
     );
