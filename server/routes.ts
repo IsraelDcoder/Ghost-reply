@@ -19,15 +19,24 @@ const openrouter = new OpenAI({
 });
 
 const OPENROUTER_MODEL =
-  process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "anthropic/claude-3.5";
-const OPENROUTER_FALLBACK_MODEL = "anthropic/claude-3.5";
+  process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "openai/gpt-4o-mini";
+const OPENROUTER_FALLBACK_MODEL = "meta-llama/llama-3.1-8b-instruct";
 
 type OpenRouterChatMessage = {
   role: "system" | "user";
   content: string;
 };
 
-const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
+const SYSTEM_PROMPT = `You are writing text messages for a real person. Write like someone texting on iMessage or WhatsApp.
+Requirements:
+- Sound natural, casual, emotionally believable, and human.
+- Use contractions, conversational rhythm, and occasional light emoji only if it feels natural.
+- Keep each reply 18-35 words, concise but complete.
+- Reference details from the conversation whenever possible.
+- Make each of the five replies feel distinctly different in tone.
+- Avoid sounding like AI, a dating coach, corporate copy, motivational advice, or a polished essay.
+- Avoid clichés, cheesy romance, and over-explaining.
+Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
 {
   "analysis": "Brief tone insight (1-2 sentences max)",
@@ -35,13 +44,23 @@ Return ONLY valid JSON, no markdown.
   "scoreLabel": "Label like 'Strong Start'",
   "scoreAdvice": "1 sentence tip",
   "replies": {
-    "confident": "<reply under 20 words>",
-    "flirty": "<reply under 20 words>",
-    "funny": "<reply under 20 words>",
-    "savage": "<reply under 20 words>",
-    "smart": "<reply under 20 words>"
+    "confident": "<reply 18-35 words, calm, direct, self-assured>",
+    "flirty": "<reply 18-35 words, playful, charming, lightly teasing>",
+    "funny": "<reply 18-35 words, light humor, clever, playful>",
+    "savage": "<reply 18-35 words, bold, witty, slightly sharp>",
+    "smart": "<reply 18-35 words, thoughtful, emotionally intelligent, mature>"
   }
 }`;
+
+function isModelFallbackError(message: string): boolean {
+  return (
+    message.includes("404") ||
+    message.includes("400") ||
+    message.includes("not a valid model") ||
+    message.includes("model not found") ||
+    message.includes("unsupported model")
+  );
+}
 
 async function createOpenRouterChatCompletion(options: {
   model: string;
@@ -55,12 +74,9 @@ async function createOpenRouterChatCompletion(options: {
     const message = error instanceof Error ? error.message : JSON.stringify(error);
     console.error("[OpenRouter] Chat completion failed:", message);
 
-    if (
-      message.includes("404") &&
-      options.model !== OPENROUTER_FALLBACK_MODEL
-    ) {
+    if (isModelFallbackError(message) && options.model !== OPENROUTER_FALLBACK_MODEL) {
       console.warn(
-        `[OpenRouter] Model ${options.model} not found, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
+        `[OpenRouter] Model ${options.model} not available, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
       );
       return await openrouter.chat.completions.create({
         ...options,
@@ -69,6 +85,38 @@ async function createOpenRouterChatCompletion(options: {
     }
 
     throw error;
+  }
+}
+
+async function humanizeReplyPayload(conversationText: string, parsed: any) {
+  try {
+    const response = await createOpenRouterChatCompletion({
+      model: OPENROUTER_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: `You are a human-writing editor. Rewrite the reply set to sound more natural, believable, and like a real person texting. Keep the same personality labels and the same overall meaning, but make the wording more casual, specific, and human. Return ONLY valid JSON with the same shape.`,
+        },
+        {
+          role: "user",
+          content: `Conversation:\n${conversationText}\n\nReply set:\n${JSON.stringify(parsed, null, 2)}`,
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.8,
+    } as any);
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return parsed;
+    }
+
+    const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const revised = JSON.parse(cleaned);
+    return revised;
+  } catch (error) {
+    console.warn("[OpenRouter] Humanization pass failed, keeping original replies.", error);
+    return parsed;
   }
 }
 
@@ -118,8 +166,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: `Conversation:\n${text}`,
           },
         ] as OpenRouterChatMessage[],
-        max_tokens: 350,
-        temperature: 0.8,
+        max_tokens: 500,
+        temperature: 0.9,
       } as any);
 
       const content = response.choices[0]?.message?.content;
@@ -135,6 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {
         console.error("[ANALYZE] ❌ Failed to parse AI response");
         return res.status(500).json({ error: "Failed to parse AI response" });
+      }
+
+      try {
+        parsed = await humanizeReplyPayload(text, parsed);
+      } catch {
+        console.warn("[ANALYZE] Humanization pass skipped");
       }
 
       // Save to database and wait for it to complete
@@ -168,7 +222,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("[ANALYZE] ❌ FATAL ERROR:", msg);
       console.log("[ANALYZE] ════════════════════════════════════════");
-      return res.status(500).json({ error: msg });
+      return res.status(502).json({
+        error: "Our AI service is temporarily unavailable. Please try again in a moment.",
+      });
     }
   });
 
@@ -200,35 +256,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const personalityPrompts: Record<string, string> = {
-        confident: "Generate a new confident, self-assured reply. Be bold and direct.",
-        flirty: "Generate a new flirty, playful reply. Be charming and suggestive.",
-        funny: "Generate a new funny, witty reply. Be clever and make them laugh.",
-        savage: "Generate a new savage, sharp reply. Be brutally honest or cutting.",
-        smart: "Generate a new thoughtful, intelligent reply. Be insightful and deep.",
+        confident: "Generate a new reply that feels calm, direct, self-assured, and naturally attractive.",
+        flirty: "Generate a new reply that feels playful, charming, lightly teasing, and effortlessly flirty.",
+        funny: "Generate a new reply that feels light, clever, and genuinely funny without sounding forced.",
+        savage: "Generate a new reply that feels bold, witty, and slightly sharp without sounding rude.",
+        smart: "Generate a new reply that feels thoughtful, emotionally intelligent, mature, and intriguing.",
       };
 
-      const response = await openrouter.chat.completions.create({
+      const response = await createOpenRouterChatCompletion({
         model: OPENROUTER_MODEL,
         messages: [
           {
             role: "system",
-            content: `You are a conversation coach. ${personalityPrompts[personality] || "Generate a witty reply."} 
-Keep it under 20 words. Return ONLY the reply text, nothing else.`,
+            content: `You are writing a real text message. ${personalityPrompts[personality] || "Generate a witty reply."}
+Write it like a real person texting on iMessage or WhatsApp.
+Requirements:
+- 18-35 words
+- natural, casual, conversational
+- use contractions and rhythm
+- sound human, not polished or robotic
+- reference the conversation context if relevant
+- no explanation, no quotes, only the reply text`,
           },
           {
             role: "user",
             content: `Conversation:\n${text}`,
           },
         ],
-        max_tokens: 200,
-        temperature: 1.0,
-      });
+        max_tokens: 180,
+        temperature: 0.9,
+      } as any);
 
       const reply = response.choices[0]?.message?.content?.trim() || "";
       return res.json({ reply: reply.replace(/^["']|["']$/g, "") });
     } catch (error: unknown) {
       console.error("Regenerate error:", error);
-      return res.status(500).json({ error: "Failed to regenerate" });
+      return res.status(502).json({
+        error: "Our AI service is temporarily unavailable. Please try again in a moment.",
+      });
     }
   });
 

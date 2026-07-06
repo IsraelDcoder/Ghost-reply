@@ -21,9 +21,18 @@ export async function registerSubscriptionRoutes(app: Express): Promise<void> {
     apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY,
   });
   const OPENROUTER_MODEL =
-    process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "anthropic/claude-3.5";
-  const OPENROUTER_FALLBACK_MODEL = "anthropic/claude-3.5";
-  const SYSTEM_PROMPT = `You are a conversation coach. Generate 5 reply styles for this conversation.
+    process.env.AI_INTEGRATIONS_OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  const OPENROUTER_FALLBACK_MODEL = "meta-llama/llama-3.1-8b-instruct";
+  const SYSTEM_PROMPT = `You are writing text messages for a real person. Write like someone texting on iMessage or WhatsApp.
+Requirements:
+- Sound natural, casual, emotionally believable, and human.
+- Use contractions, conversational rhythm, and occasional light emoji only if it feels natural.
+- Keep each reply 18-35 words, concise but complete.
+- Reference details from the conversation whenever possible.
+- Make each of the five replies feel distinctly different in tone.
+- Avoid sounding like AI, a dating coach, corporate copy, motivational advice, or a polished essay.
+- Avoid clichés, cheesy romance, and over-explaining.
+Generate 5 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
 {
   "analysis": "Brief tone insight (1-2 sentences max)",
@@ -31,13 +40,23 @@ Return ONLY valid JSON, no markdown.
   "scoreLabel": "Label like 'Strong Start'",
   "scoreAdvice": "1 sentence tip",
   "replies": {
-    "confident": "<reply under 20 words>",
-    "flirty": "<reply under 20 words>",
-    "funny": "<reply under 20 words>",
-    "savage": "<reply under 20 words>",
-    "smart": "<reply under 20 words>"
+    "confident": "<reply 18-35 words, calm, direct, self-assured>",
+    "flirty": "<reply 18-35 words, playful, charming, lightly teasing>",
+    "funny": "<reply 18-35 words, light humor, clever, playful>",
+    "savage": "<reply 18-35 words, bold, witty, slightly sharp>",
+    "smart": "<reply 18-35 words, thoughtful, emotionally intelligent, mature>"
   }
 }`;
+
+  function isModelFallbackError(message: string): boolean {
+    return (
+      message.includes("404") ||
+      message.includes("400") ||
+      message.includes("not a valid model") ||
+      message.includes("model not found") ||
+      message.includes("unsupported model")
+    );
+  }
 
   async function createOpenRouterChatCompletion(options: {
     model: string;
@@ -51,12 +70,9 @@ Return ONLY valid JSON, no markdown.
       const message = error instanceof Error ? error.message : JSON.stringify(error);
       console.error("[OpenRouter] Chat completion failed:", message);
 
-      if (
-        message.includes("404") &&
-        options.model !== OPENROUTER_FALLBACK_MODEL
-      ) {
+      if (isModelFallbackError(message) && options.model !== OPENROUTER_FALLBACK_MODEL) {
         console.warn(
-          `[OpenRouter] Model ${options.model} not found, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
+          `[OpenRouter] Model ${options.model} not available, retrying with fallback model ${OPENROUTER_FALLBACK_MODEL}.`,
         );
         return await openrouter.chat.completions.create({
           ...options,
@@ -65,6 +81,37 @@ Return ONLY valid JSON, no markdown.
       }
 
       throw error;
+    }
+  }
+
+  async function humanizeReplyPayload(conversationText: string, parsed: any) {
+    try {
+      const response = await createOpenRouterChatCompletion({
+        model: OPENROUTER_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `You are a human-writing editor. Rewrite the reply set to sound more natural, believable, and like a real person texting. Keep the same personality labels and the same overall meaning, but make the wording more casual, specific, and human. Return ONLY valid JSON with the same shape.`,
+          },
+          {
+            role: "user",
+            content: `Conversation:\n${conversationText}\n\nReply set:\n${JSON.stringify(parsed, null, 2)}`,
+          },
+        ],
+        max_tokens: 500,
+        temperature: 0.8,
+      } as any);
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return parsed;
+      }
+
+      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      return JSON.parse(cleaned);
+    } catch (error) {
+      console.warn("[OpenRouter] Humanization pass failed, keeping original replies.", error);
+      return parsed;
     }
   }
 
@@ -207,8 +254,8 @@ Return ONLY valid JSON, no markdown.
           content: `Conversation:\n${text}`,
         },
       ],
-      max_tokens: 350,
-      temperature: 0.8,
+      max_tokens: 500,
+      temperature: 0.9,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -222,6 +269,12 @@ Return ONLY valid JSON, no markdown.
       parsed = JSON.parse(cleaned);
     } catch {
       return res.status(500).json({ error: "Failed to parse AI response" });
+    }
+
+    try {
+      parsed = await humanizeReplyPayload(text, parsed);
+    } catch {
+      console.warn("[ANALYZE] Humanization pass skipped");
     }
 
     try {

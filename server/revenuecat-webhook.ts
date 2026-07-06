@@ -56,22 +56,28 @@ function verifyWebhookSignature(body: string, signature: string): boolean {
 function setupRevenueCatWebhookBody(app: Express) {
   app.post(
     "/api/webhooks/revenuecat",
-    express.raw({ type: "application/json" }),
+    express.json({ type: "application/json", verify: (req, _res, buf) => {
+      (req as any).rawBody = buf;
+    }}),
     async (req: Request, res: Response) => {
       try {
         console.log("[RevenueCat] 🔔 WEBHOOK RECEIVED");
         
         const signature = req.header("X-RevenueCat-Signature");
         
-        // FIX: Handle body that might be a Buffer or already converted
+        const rawBodyBuffer = (req as any).rawBody;
         let rawBody: string;
-        if (Buffer.isBuffer((req as any).body)) {
-          rawBody = ((req as any).body as Buffer).toString("utf-8");
-        } else if (typeof (req as any).body === "string") {
-          rawBody = (req as any).body;
+        if (typeof rawBodyBuffer === "string") {
+          rawBody = rawBodyBuffer;
+        } else if (Buffer.isBuffer(rawBodyBuffer)) {
+          rawBody = rawBodyBuffer.toString("utf-8");
+        } else if (typeof req.body === "string") {
+          rawBody = req.body;
+        } else if (req.body && typeof req.body === "object") {
+          rawBody = JSON.stringify(req.body);
         } else {
-          console.error("[RevenueCat] ❌ Body is neither Buffer nor string:", typeof (req as any).body);
-          console.error("[RevenueCat] Body value:", (req as any).body);
+          console.error("[RevenueCat] ❌ Body is neither Buffer nor string:", typeof req.body);
+          console.error("[RevenueCat] Body value:", req.body);
           return res.status(400).json({ error: "Invalid body format" });
         }
 
@@ -93,7 +99,7 @@ function setupRevenueCatWebhookBody(app: Express) {
         // Parse body after validation
         let body;
         try {
-          body = JSON.parse(rawBody);
+          body = typeof req.body === "object" && req.body !== null ? req.body : JSON.parse(rawBody);
         } catch (parseErr) {
           console.error("[RevenueCat] ❌ Failed to parse webhook JSON:", parseErr);
           console.error("[RevenueCat] Raw body was:", rawBody);
