@@ -109,7 +109,7 @@ export function RevenueCatPaywall({
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.paywallContainer}>
         <Text style={styles.title}>GhostReply Pro</Text>
-        <Text style={styles.subtitle}>Unlock unlimited smart replies</Text>
+        <Text style={styles.subtitle}>Unlock unlimited communication coaching</Text>
         
         <View style={styles.featureList}>
           <Text style={styles.feature}>✓ Unlimited conversations</Text>

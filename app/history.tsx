@@ -25,29 +25,23 @@ interface Conversation {
   score: number;
   scoreLabel: string;
   replies: {
+    professional: string;
+    warm: string;
     confident: string;
-    flirty: string;
-    funny: string;
-    savage: string;
-    smart: string;
   };
   createdAt: string;
 }
 
 const PERSONALITY_COLORS: Record<string, string> = {
-  confident: "#FF8C42",
-  flirty: "#FF6B9D",
-  funny: "#4ECDC4",
-  savage: "#FF4757",
-  smart: "#7B6CFF",
+  professional: "#6366F1",
+  warm: "#10B981",
+  confident: "#F59E0B",
 };
 
 const PERSONALITY_EMOJIS: Record<string, string> = {
-  confident: "😎",
-  flirty: "😏",
-  funny: "😂",
-  savage: "🔥",
-  smart: "🧠",
+  professional: "💼",
+  warm: "🤝",
+  confident: "⚡",
 };
 
 export default function HistoryScreen() {

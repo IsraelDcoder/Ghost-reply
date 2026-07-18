@@ -27,16 +27,16 @@ type OpenRouterChatMessage = {
   content: string;
 };
 
-const SYSTEM_PROMPT = `You are writing text messages for a real person. Write like someone texting on iMessage or WhatsApp.
+const SYSTEM_PROMPT = `You are an AI communication coach for freelancers. Help the user write professional, confident messages for client and project conversations.
 Requirements:
-- Sound natural, casual, emotionally believable, and human.
-- Use contractions, conversational rhythm, and occasional light emoji only if it feels natural.
+- Sound natural, calm, and believable.
+- Use concise, professional wording that feels human and polished.
 - Keep each reply 18-35 words, concise but complete.
 - Reference details from the conversation whenever possible.
-- Make each of the five replies feel distinctly different in tone.
-- Avoid sounding like AI, a dating coach, corporate copy, motivational advice, or a polished essay.
-- Avoid clichés, cheesy romance, and over-explaining.
-Generate 5 reply styles for this conversation.
+- Make each of the three reply styles feel distinctly different in tone.
+- Avoid sounding like AI, overly corporate, or overly casual.
+- Avoid clichés, flirtation, and over-explaining.
+Generate 3 reply styles for this conversation.
 Return ONLY valid JSON, no markdown.
 {
   "analysis": "Brief tone insight (1-2 sentences max)",
@@ -44,11 +44,9 @@ Return ONLY valid JSON, no markdown.
   "scoreLabel": "Label like 'Strong Start'",
   "scoreAdvice": "1 sentence tip",
   "replies": {
-    "confident": "<reply 18-35 words, calm, direct, self-assured>",
-    "flirty": "<reply 18-35 words, playful, charming, lightly teasing>",
-    "funny": "<reply 18-35 words, light humor, clever, playful>",
-    "savage": "<reply 18-35 words, bold, witty, slightly sharp>",
-    "smart": "<reply 18-35 words, thoughtful, emotionally intelligent, mature>"
+    "professional": "<reply 18-35 words, calm, direct, business-appropriate>",
+    "warm": "<reply 18-35 words, friendly, empathetic, polished>",
+    "confident": "<reply 18-35 words, assertive, clear, self-assured>"
   }
 }`;
 
@@ -191,19 +189,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("[ANALYZE] Humanization pass skipped");
       }
 
+      let insertedConversationId: string | undefined;
+
       // Save to database and wait for it to complete
       try {
-        await db.insert(conversations)
+        const inserted = await db.insert(conversations)
           .values({
             userId: user.id,
             inputText: text,
             analysis: parsed.analysis || "",
             score: parsed.score || 0,
             scoreLabel: parsed.scoreLabel || "Neutral",
-            scoreAdvice: parsed.scoreAdvice || "Keep the conversation going",
+            scoreAdvice: parsed.scoreAdvice || "Keep the conversation clear and professional",
             replies: parsed.replies || {},
-          });
-        console.log("[ANALYZE] ✓ Conversation saved to database");
+          })
+          .returning({ id: conversations.id });
+        insertedConversationId = inserted?.[0]?.id;
+        console.log("[ANALYZE] ✓ Conversation saved to database", insertedConversationId);
       } catch (dbError) {
         console.error("[ANALYZE] ⚠️  DB save failed:", dbError);
         // Log to error tracking, don't fail the request
@@ -211,8 +213,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Return response after DB save is complete
       const responseData = {
-        ...parsed,
-        conversationId: undefined,
+        success: true,
+        data: {
+          id: insertedConversationId,
+          ...parsed,
+          situation: text,
+          strategy: parsed.analysis || "",
+          insights: parsed.scoreAdvice ? [parsed.scoreAdvice] : [],
+          replies: parsed.replies || {},
+        },
       };
 
       console.log("[ANALYZE] ✓ SUCCESS - Returning response");
@@ -225,6 +234,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(502).json({
         error: "Our AI service is temporarily unavailable. Please try again in a moment.",
       });
+    }
+  });
+
+  app.get("/api/result/:id", async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const conversationId = req.params.id;
+      const conversation = await db.query.conversations.findFirst({
+        where: (fields, operators) =>
+          operators.and(
+            operators.eq(fields.id, String(conversationId)),
+            operators.eq(fields.userId, user.id)
+          ),
+      });
+
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          id: conversation.id,
+          situation: conversation.inputText,
+          strategy: conversation.analysis,
+          insights: conversation.scoreAdvice ? [conversation.scoreAdvice] : [],
+          replies: conversation.replies || {},
+          score: conversation.score,
+          scoreLabel: conversation.scoreLabel,
+          scoreAdvice: conversation.scoreAdvice,
+        },
+      });
+    } catch (error) {
+      console.error("Get result error:", error);
+      return res.status(500).json({ error: "Failed to fetch result" });
     }
   });
 
@@ -256,11 +304,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const personalityPrompts: Record<string, string> = {
-        confident: "Generate a new reply that feels calm, direct, self-assured, and naturally attractive.",
-        flirty: "Generate a new reply that feels playful, charming, lightly teasing, and effortlessly flirty.",
-        funny: "Generate a new reply that feels light, clever, and genuinely funny without sounding forced.",
-        savage: "Generate a new reply that feels bold, witty, and slightly sharp without sounding rude.",
-        smart: "Generate a new reply that feels thoughtful, emotionally intelligent, mature, and intriguing.",
+        professional: "Generate a polished reply that feels calm, direct, and business-appropriate.",
+        warm: "Generate a friendly reply that feels empathetic, clear, and professional.",
+        confident: "Generate a strong reply that feels assertive, concise, and self-assured.",
       };
 
       const response = await createOpenRouterChatCompletion({
@@ -268,13 +314,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages: [
           {
             role: "system",
-            content: `You are writing a real text message. ${personalityPrompts[personality] || "Generate a witty reply."}
-Write it like a real person texting on iMessage or WhatsApp.
+            content: `You are helping draft a professional message. ${personalityPrompts[personality] || "Generate a polished reply."}
+Write it like a professional message for a client or collaborator.
 Requirements:
 - 18-35 words
-- natural, casual, conversational
-- use contractions and rhythm
-- sound human, not polished or robotic
+- natural, clear, conversational
+- sound human and polished
 - reference the conversation context if relevant
 - no explanation, no quotes, only the reply text`,
           },

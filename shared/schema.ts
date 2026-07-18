@@ -27,11 +27,9 @@ export const conversations = pgTable("conversations", {
   scoreLabel: varchar("score_label").notNull(),
   scoreAdvice: varchar("score_advice").notNull(),
   replies: jsonb("replies").notNull().$type<{
+    professional: string;
+    warm: string;
     confident: string;
-    flirty: string;
-    funny: string;
-    savage: string;
-    smart: string;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

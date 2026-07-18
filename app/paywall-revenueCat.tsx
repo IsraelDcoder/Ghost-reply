@@ -1,379 +1,370 @@
-/**
- * Paywall Screen with RevenueCat Integration - CLEAN
- * Consolidated premium UI layout and purchase flow.
- */
-
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   ScrollView,
-  Platform,
+  Pressable,
   Alert,
-  ActivityIndicator,
-  Linking,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+
 import { useSubscription } from "@/context/SubscriptionContextWithRevenueCat";
 import { useApp } from "@/context/AppContext";
-import { getAvailableOfferings } from "@/lib/revenueCat";
+import { Button } from "@/components/Button";
+import { Container } from "@/components/Container";
+import { Card } from "@/components/Card";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+} from "@/constants/designTokens";
 
-const SOCIAL_PROOF = {
-  testimonial: "GhostReply got me 7 dates in one week.",
-  testimonialAuthor: "Chidi, Lagos",
-};
-
-const FEATURE_CARDS = [
-  { icon: "⚡", title: "Unlimited AI Replies", subtitle: "Never run out of things to say." },
-  { icon: "✨", title: "Multiple Reply Styles", subtitle: "Flirty, Funny, Confident & more." },
-  { icon: "🛡", title: "Private & Secure", subtitle: "Your chats remain private." },
-  { icon: "⏱", title: "Reply in Seconds", subtitle: "No more overthinking." },
-];
-
-interface PlanData {
-  id: string;
-  type: "weekly" | "monthly";
-  priceString: string;
-  period: string;
+interface PlanFeature {
+  text: string;
+  icon: string;
 }
 
-export default function PaywallScreenWithRevenueCat() {
+interface PricingPlan {
+  id: string;
+  name: string;
+  price: string;
+  period: string;
+  popular: boolean;
+  features: PlanFeature[];
+  cta: string;
+}
+
+const PLANS: PricingPlan[] = [
+  {
+    id: "yearly",
+    name: "Yearly",
+    price: "$39.99",
+    period: "per year",
+    popular: true,
+    features: [
+      { icon: "chat-multiple-outline", text: "Unlimited Conversations" },
+      { icon: "strategy", text: "AI Strategy Coaching" },
+      { icon: "lightbulb-on", text: "Communication Insights" },
+      { icon: "clock-fast", text: "Priority Processing" },
+      { icon: "database-export", text: "Conversation History" },
+      { icon: "refresh-circle", text: "Reply Regeneration" },
+    ],
+    cta: "Start Free Trial",
+  },
+  {
+    id: "monthly",
+    name: "Monthly",
+    price: "$7.99",
+    period: "per month",
+    popular: false,
+    features: [
+      { icon: "chat-multiple-outline", text: "Unlimited Conversations" },
+      { icon: "strategy", text: "AI Strategy Coaching" },
+      { icon: "lightbulb-on", text: "Communication Insights" },
+    ],
+    cta: "Start Free Trial",
+  },
+];
+
+const BENEFIT_BULLETS = [
+  "Communicate Better",
+  "Win More Clients",
+  "Negotiate Professionally",
+  "Handle Difficult Conversations",
+  "Request Payments Confidently",
+  "Become a Better Freelancer",
+];
+
+export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { subscriptionStatus, purchaseSubscription: purchase, loading, restorePurchases, shouldBypassPaywall, refreshSubscriptionStatus } = useSubscription();
+  const { requirePremiumAccess } = useSubscription();
   const { setHasOnboarded } = useApp();
+  const [selectedPlan, setSelectedPlan] = useState("yearly");
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const [selectedPlan, setSelectedPlan] = useState<"weekly" | "monthly">("monthly");
-  const [isPurchasing, setIsPurchasing] = useState(false);
-  const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
-  const [offeringsError, setOfferingsError] = useState<string | null>(null);
-  const [plans, setPlans] = useState<Map<string, PlanData>>(new Map());
-
-  useEffect(() => {
-    if (shouldBypassPaywall()) {
-      router.replace("/home");
-    }
-  }, [shouldBypassPaywall]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshSubscriptionStatus();
-    }, [refreshSubscriptionStatus])
-  );
-
-  const fetchOfferings = useCallback(async () => {
-    try {
-      setIsLoadingOfferings(true);
-      setOfferingsError(null);
-      const offerings = await getAvailableOfferings();
-
-      if (!offerings || !offerings.availablePackages || offerings.availablePackages.length === 0) {
-        throw new Error("No offerings available from RevenueCat");
-      }
-
-      const plansMap = new Map<string, PlanData>();
-      for (const pkg of offerings.availablePackages) {
-        const isWeekly = pkg.identifier.includes("weekly");
-        const isMonthly = pkg.identifier.includes("monthly");
-
-        if (isWeekly) {
-          plansMap.set("weekly", {
-            id: pkg.identifier,
-            type: "weekly",
-            priceString: pkg.product?.priceString ?? "$2.99",
-            period: "/week",
-          });
-        } else if (isMonthly) {
-          plansMap.set("monthly", {
-            id: pkg.identifier,
-            type: "monthly",
-            priceString: pkg.product?.priceString ?? "$9.99",
-            period: "/month",
-          });
-        }
-      }
-
-      setPlans(plansMap);
-    } catch (err) {
-      setOfferingsError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoadingOfferings(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOfferings();
-  }, [fetchOfferings]);
-
-  const handlePurchaseSubscription = async () => {
-    if (isPurchasing) return;
-    const plan = plans.get(selectedPlan);
-    if (!plan) {
-      Alert.alert("Error", "Please select a plan.");
-      return;
-    }
-
-    setIsPurchasing(true);
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const success = await purchase(plan.id);
-      if (success) {
-        await refreshSubscriptionStatus();
-        await setHasOnboarded(true);
-        router.replace("/home");
-      }
-    } catch (err) {
-      Alert.alert("Purchase Error", err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setIsPurchasing(false);
-    }
-  };
-
-  const handleContinueForFree = async () => {
+  const handleContinueLimited = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setHasOnboarded(true);
     router.replace("/home");
   };
 
-  const handleRestorePurchases = async () => {
+  const handleStartTrial = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsProcessing(true);
     try {
-      await restorePurchases();
-    } catch (err) {
-      Alert.alert("Restore Error", "Failed to restore purchases.");
+      if (requirePremiumAccess()) {
+        router.replace("/home");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to start trial");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPadding = Platform.OS === "web" ? 34 : Math.max(insets.bottom, 20);
-
-  if (isLoadingOfferings) {
-    return (
-      <LinearGradient colors={["#05050D", "#070A1A", "#0D1130"]} style={styles.container}>
-        <View style={[styles.centerContent, { paddingTop: topPadding + 20 }]}> 
-          <ActivityIndicator size="large" color="#8B76FF" />
-          <Text style={styles.loadingText}>Loading premium plans...</Text>
-        </View>
-      </LinearGradient>
-    );
-  }
-
-  if (offeringsError) {
-    return (
-      <LinearGradient colors={["#05050D", "#070A1A", "#0D1130"]} style={styles.container}>
-        <View style={[styles.centerContent, { paddingTop: topPadding + 20 }]}> 
-          <Ionicons name="alert-circle-outline" size={60} color="#FF6B6B" />
-          <Text style={styles.errorTitle}>Oops!</Text>
-          <Text style={styles.errorMessage}>{offeringsError}</Text>
-          <Pressable onPress={fetchOfferings} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
-        </View>
-      </LinearGradient>
-    );
-  }
-
-  const monthly = plans.get("monthly");
-  const weekly = plans.get("weekly");
-
   return (
-    <LinearGradient colors={["#05050D", "#070A1A", "#0D1130"]} style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: topPadding + 16, paddingBottom: bottomPadding + 24 }]}>
-        <View style={styles.topBar}>
-          <Pressable onPress={handleContinueForFree} style={styles.closeButton}>
-            <Ionicons name="close" size={18} color="#fff" />
-          </Pressable>
-          <View style={styles.brandingRow}>
-            <Text style={styles.brandLogo}>👻</Text>
-            <Text style={styles.brandText}>GhostReply</Text>
-          </View>
-          <View style={styles.topSpacer} />
+    <Container scrollable edges={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Unlock Your Full Communication Power</Text>
+          <Text style={styles.subtitle}>
+            Join professionals who earn more, lose less sleep, and build stronger client relationships.
+          </Text>
         </View>
 
-        <View style={styles.heroSection}>
-          <Text style={styles.heroHeadline}>Reply Smarter.{"\n"}Sound Like You.</Text>
-          <Text style={styles.heroSubtitle}>AI replies that actually sound human, so every text feels effortless.</Text>
+        {/* Benefits */}
+        <View style={styles.benefitsContainer}>
+          {BENEFIT_BULLETS.map((benefit, index) => (
+            <View key={index} style={styles.benefitItem}>
+              <View style={styles.benefitCheckmark}>
+                <MaterialCommunityIcons name="check" size={14} color={Colors.primary} />
+              </View>
+              <Text style={styles.benefitText}>{benefit}</Text>
+            </View>
+          ))}
         </View>
 
-        <View style={styles.previewCard}>
-          <View style={styles.previewHeader}>
-            <View style={styles.previewDot} />
-            <View style={styles.previewDot} />
-            <View style={styles.previewDot} />
-          </View>
-          <View style={styles.previewThread}>
-            <View style={styles.previewPersonRow}>
-              <Text style={styles.previewAvatar}>👩</Text>
-              <Text style={styles.previewPerson}>Emily</Text>
-            </View>
-            <View style={styles.previewBubble}>
-              <Text style={styles.previewBubbleLabel}>Hey, are you free tonight? 🤔</Text>
-            </View>
-            <View style={styles.previewDivider} />
-            <Text style={styles.previewGhostLabel}>GhostReply</Text>
-            <View style={styles.replyOption}>
-              <Text style={styles.replyOptionBadge}>💜 Flirty</Text>
-              <Text style={styles.replyOptionText}>Only if you're asking me on a date 😉</Text>
-            </View>
-            <View style={styles.replyOption}>
-              <Text style={styles.replyOptionBadge}>💚 Funny</Text>
-              <Text style={styles.replyOptionText}>Free tonight... dangerous combo 😎</Text>
-            </View>
-            <View style={styles.replyOption}>
-              <Text style={styles.replyOptionBadge}>💙 Confident</Text>
-              <Text style={styles.replyOptionText}>Yes. But I decide where we go.</Text>
-            </View>
-          </View>
+        {/* Plans */}
+        <Text style={styles.plansLabel}>Choose Your Plan</Text>
 
-          <View style={styles.beforeAfterRow}>
-            <View style={styles.beforeAfterBox}>
-              <Text style={styles.beforeAfterLabel}>Before</Text>
-              <Text style={styles.beforeAfterText}>“ok”</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={16} color="#A179FF" />
-            <View style={[styles.beforeAfterBox, styles.afterBox]}>
-              <Text style={styles.beforeAfterLabel}>After</Text>
-              <Text style={styles.beforeAfterText}>“Sounds good! Looking forward to it 😊”</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.benefitsBlock}>
-          <Text style={styles.benefitItem}>✓ Reply instantly</Text>
-          <Text style={styles.benefitItem}>✓ Sound more confident, funny, or flirty</Text>
-          <Text style={styles.benefitItem}>✓ Never overthink texts again</Text>
-        </View>
-
-        <View style={styles.planContainer}>
-          <Text style={styles.sectionTitle}>Choose your plan</Text>
-          <View style={styles.planCardsRow}>
-            {monthly ? (
-              <Pressable onPress={() => setSelectedPlan("monthly")} style={[styles.planCard, styles.planCardPopular, selectedPlan === "monthly" && styles.planCardSelected]}>
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
+        <View style={styles.plansContainer}>
+          {PLANS.map((plan) => (
+            <Pressable
+              key={plan.id}
+              onPress={() => {
+                setSelectedPlan(plan.id);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <Card
+                variant={selectedPlan === plan.id ? "default" : "outlined"}
+                padding={Spacing[4]}
+                gap={Spacing[3]}
+              >
+                {/* Plan Header */}
+                <View style={styles.planHeader}>
+                  <View>
+                    <Text style={styles.planName}>{plan.name}</Text>
+                    <Text style={styles.planPeriod}>{plan.period}</Text>
+                  </View>
+                  {selectedPlan === plan.id && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedText}>Selected</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.planTitle}>Monthly</Text>
-                <Text style={styles.planPrice}>{monthly.priceString}</Text>
-                <Text style={styles.planPeriod}>Best value • cancel anytime</Text>
-              </Pressable>
-            ) : null}
 
-            {weekly ? (
-              <Pressable onPress={() => setSelectedPlan("weekly")} style={[styles.planCard, styles.planCardSimple, selectedPlan === "weekly" && styles.planCardSelected]}>
-                <Text style={styles.planTitle}>Weekly</Text>
-                <Text style={styles.planPrice}>{weekly.priceString}</Text>
-                <Text style={styles.planPeriod}>Flexible</Text>
-              </Pressable>
-            ) : null}
-          </View>
+                {/* Price */}
+                <View>
+                  <Text style={styles.price}>
+                    {plan.price}
+                    <Text style={styles.priceSubtext}> / year</Text>
+                  </Text>
+                  {plan.popular && (
+                    <Text style={styles.popularBadge}>Most Popular - Save 40%</Text>
+                  )}
+                </View>
+
+                {/* Features */}
+                <View style={styles.featuresContainer}>
+                  {plan.features.map((feature, index) => (
+                    <View key={index} style={styles.featureItem}>
+                      <MaterialCommunityIcons
+                        name={feature.icon as any}
+                        size={18}
+                        color={Colors.primary}
+                      />
+                      <Text style={styles.featureText}>{feature.text}</Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            </Pressable>
+          ))}
         </View>
+      </View>
 
-        <View style={styles.trustRow}>
-          <Text style={styles.stars}>★★★★★</Text>
-          <Text style={styles.trustText}>Loved by people who text every day.</Text>
+      {/* Bottom Actions */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing[4] }]}>
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
+          isLoading={isProcessing}
+          isDisabled={isProcessing}
+          onPress={handleStartTrial}
+        >
+          Start 7-Day Free Trial
+        </Button>
+
+        <Text style={styles.disclaimer}>
+          Cancel anytime. No credit card required.
+        </Text>
+
+        <Button
+          variant="ghost"
+          size="lg"
+          fullWidth
+          onPress={handleContinueLimited}
+        >
+          Continue with Limited Access
+        </Button>
+
+        {/* Legal */}
+        <View style={styles.legalContainer}>
+          <Pressable>
+            <Text style={styles.legalLink}>Terms</Text>
+          </Pressable>
+          <Text style={styles.legalDot}>•</Text>
+          <Pressable>
+            <Text style={styles.legalLink}>Privacy</Text>
+          </Pressable>
         </View>
-
-        <Pressable onPress={handlePurchaseSubscription} disabled={isPurchasing} style={styles.primaryButton}>
-          {isPurchasing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Text style={styles.primaryButtonText}>Unlock Unlimited Replies</Text>
-              <Text style={styles.primaryButtonSubtext}>{selectedPlan === "monthly" ? `${monthly?.priceString ?? ""}/month` : `${weekly?.priceString ?? ""}/week`}</Text>
-              <Text style={styles.primaryButtonHint}>Cancel anytime</Text>
-            </>
-          )}
-        </Pressable>
-
-        <Pressable onPress={handleContinueForFree} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Explore the App</Text>
-          <Text style={styles.secondaryButtonSmall}>See how Ghost Reply works</Text>
-        </Pressable>
-
-        <View style={styles.footerSection}>
-          <Text style={styles.footerText}>Secure payment via Google Play • Cancel anytime</Text>
-          <View style={styles.footerLinks}>
-            <Pressable onPress={handleRestorePurchases}><Text style={styles.footerLink}>Restore Purchase</Text></Pressable>
-            <Text style={styles.footerDivider}>•</Text>
-            <Pressable onPress={() => Linking.openURL("https://ghostreply-app.netlify.app/")}><Text style={styles.footerLink}>Terms</Text></Pressable>
-            <Text style={styles.footerDivider}>•</Text>
-            <Pressable onPress={() => Linking.openURL("https://ghostreply-app.netlify.app/")}><Text style={styles.footerLink}>Privacy Policy</Text></Pressable>
-          </View>
-        </View>
-      </ScrollView>
-    </LinearGradient>
+      </View>
+    </Container>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16 },
-  centerContent: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
-  loadingText: { color: "#ddd", fontSize: 16, marginTop: 16, textAlign: "center" },
-  errorTitle: { color: "#fff", fontSize: 24, fontWeight: "700", marginBottom: 12, textAlign: "center" },
-  errorMessage: { color: "#999", fontSize: 14, marginBottom: 24, textAlign: "center", lineHeight: 20 },
-  retryButton: { backgroundColor: "#6366f1", paddingVertical: 12, paddingHorizontal: 32, borderRadius: 8, marginTop: 12 },
-  retryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600", textAlign: "center" },
-  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 28 },
-  closeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.08)", justifyContent: "center", alignItems: "center" },
-  brandingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", flex: 1 },
-  topSpacer: { width: 44 },
-  brandLogo: { fontSize: 22, marginRight: 8 },
-  brandText: { color: "#fff", fontSize: 18, fontWeight: "800" },
-  heroSection: { marginBottom: 28 },
-  heroHeadline: { color: "#fff", fontSize: 34, fontWeight: "900", lineHeight: 42, marginBottom: 10 },
-  heroHeadlineHighlight: { color: "#A179FF" },
-  heroSubtitle: { color: "#C2C1D9", fontSize: 15, lineHeight: 22 },
-  previewCard: { backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 20, padding: 16, marginBottom: 18 },
-  previewHeader: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  previewDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.24)" },
-  previewThread: { backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 16 },
-  previewPersonRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  previewAvatar: { fontSize: 18, marginRight: 8 },
-  previewPerson: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  previewBubble: { backgroundColor: "rgba(255,255,255,0.08)", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, marginBottom: 10 },
-  previewBubbleLabel: { color: "#fff", fontSize: 14 },
-  previewDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.12)", marginVertical: 10 },
-  previewGhostLabel: { color: "#A179FF", fontSize: 14, fontWeight: "800", marginBottom: 8 },
-  replyOption: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.03)", marginBottom: 8 },
-  replyOptionBadge: { color: "#fff", fontSize: 12, fontWeight: "800", marginBottom: 4 },
-  replyOptionText: { color: "#CFCFE8", fontSize: 13 },
-  beforeAfterRow: { flexDirection: "row", alignItems: "center", marginTop: 12, gap: 8 },
-  beforeAfterBox: { flex: 1, backgroundColor: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 10 },
-  afterBox: { backgroundColor: "rgba(161,121,255,0.12)" },
-  beforeAfterLabel: { color: "#8F8FB7", fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 },
-  beforeAfterText: { color: "#fff", fontSize: 12 },
-  benefitsBlock: { marginBottom: 18, paddingHorizontal: 4 },
-  benefitItem: { color: "#D6D4EB", fontSize: 14, marginBottom: 8 },
-  planContainer: { marginBottom: 16 },
-  sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "800", marginBottom: 12 },
-  planCardsRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  planCard: { flex: 1, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: "rgba(255,255,255,0.03)", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
-  planCardPopular: { paddingVertical: 18, borderColor: "#A179FF", backgroundColor: "rgba(161,121,255,0.12)" },
-  planCardSimple: { paddingVertical: 12 },
-  planCardSelected: { borderColor: "#8B76FF", shadowColor: "#8B76FF", shadowOpacity: 0.14, shadowRadius: 10, borderWidth: 1.5 },
-  popularBadge: { alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.14)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, marginBottom: 10 },
-  popularBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
-  planTitle: { color: "#fff", fontSize: 14, fontWeight: "800", marginBottom: 6 },
-  planPrice: { color: "#fff", fontSize: 20, fontWeight: "800" },
-  planPeriod: { color: "#B8B7D6", fontSize: 12, marginTop: 4 },
-  trustRow: { alignItems: "center", marginBottom: 12 },
-  stars: { color: "#FFD66B", fontSize: 16, marginBottom: 4, letterSpacing: 2 },
-  trustText: { color: "#D6D4EB", fontSize: 13, textAlign: "center" },
-  primaryButton: { marginTop: 12, borderRadius: 14, backgroundColor: "#8B76FF", paddingVertical: 14, alignItems: "center" },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  primaryButtonSubtext: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 4 },
-  primaryButtonHint: { color: "rgba(255,255,255,0.72)", fontSize: 12, marginTop: 4 },
-  secondaryButton: { marginTop: 10, borderRadius: 12, paddingVertical: 12, alignItems: "center", backgroundColor: "rgba(255,255,255,0.02)", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
-  secondaryButtonText: { color: "#B1A7FF", fontSize: 15, fontWeight: "800" },
-  secondaryButtonSmall: { color: "#8F8FB7", fontSize: 12, marginTop: 6 },
-  footerSection: { alignItems: "center", marginTop: 20, marginBottom: 20 },
-  footerText: { color: "#77798F", fontSize: 12, marginBottom: 10 },
-  footerLinks: { flexDirection: "row", alignItems: "center", gap: 8 },
-  footerLink: { color: "#8F8FB7", fontSize: 12, textDecorationLine: "underline" },
-  footerDivider: { color: "#666", marginHorizontal: 6 },
+  header: {
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[6],
+    paddingBottom: Spacing[6],
+    gap: Spacing[6],
+  } as const,
+  headerContent: {
+    gap: Spacing[3],
+  } as const,
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 36,
+    letterSpacing: -0.5,
+    color: Colors.dark.textPrimary,
+  } as any,
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "400",
+    lineHeight: 24,
+    color: Colors.dark.textSecondary,
+  } as any,
+  benefitsContainer: {
+    gap: Spacing[2],
+  } as const,
+  benefitItem: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing[3],
+  } as const,
+  benefitCheckmark: {
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primary + "20",
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+  } as const,
+  benefitText: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: Colors.dark.textPrimary,
+  } as any,
+  plansLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textTransform: "uppercase" as any,
+    color: Colors.dark.textMuted,
+  } as any,
+  plansContainer: {
+    gap: Spacing[3],
+  } as const,
+  planHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "flex-start" as const,
+  } as const,
+  planName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.dark.textPrimary,
+  } as any,
+  planPeriod: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.dark.textSecondary,
+    marginTop: Spacing[1],
+  } as any,
+  selectedBadge: {
+    paddingHorizontal: Spacing[2],
+    paddingVertical: Spacing[1],
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primary + "20",
+  } as const,
+  selectedText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.primary,
+  } as any,
+  price: {
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 36,
+    color: Colors.dark.textPrimary,
+  } as any,
+  priceSubtext: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.dark.textSecondary,
+  } as any,
+  popularBadge: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.success,
+    marginTop: Spacing[1],
+  } as any,
+  featuresContainer: {
+    gap: Spacing[2],
+  } as const,
+  featureItem: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing[2],
+  } as const,
+  featureText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.dark.textPrimary,
+  } as any,
+  footer: {
+    paddingHorizontal: Spacing[4],
+    gap: Spacing[2],
+  } as const,
+  disclaimer: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.dark.textMuted,
+    textAlign: "center" as any,
+    marginBottom: Spacing[2],
+  } as any,
+  legalContainer: {
+    flexDirection: "row" as const,
+    justifyContent: "center" as const,
+    gap: Spacing[2],
+    marginTop: Spacing[2],
+  } as const,
+  legalLink: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.dark.textMuted,
+  } as any,
+  legalDot: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+  } as any,
 });

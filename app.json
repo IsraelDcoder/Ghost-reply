@@ -9,7 +9,7 @@
     "scheme": "ghostreply",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "description": "AI-powered conversation reply generator. Get 5 different reply personalities for any chat.",
+    "description": "AI-powered client communication coach for freelancers. Get professional strategies and replies for client conversations.",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
